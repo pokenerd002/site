@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS ARCADE // Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Orbitron:wght@600;700;800;900&amp;display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #060810;
+            --card-bg: rgba(13, 18, 32, 0.88);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-dark);
+            color: #e2e8f0;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 12% 14%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
+                radial-gradient(circle at 88% 82%, rgba(255, 42, 133, 0.08) 0%, transparent 45%),
+                linear-gradient(to bottom, #060810, #0a0f1e);
+        }
+
+        .font-display { font-family: 'Orbitron', sans-serif; }
+
+        .cyber-grid {
+            background-size: 44px 44px;
+            background-image: 
+                linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+        }
+
+        .game-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(0, 240, 255, 0.45);
+            box-shadow: 0 16px 36px -10px rgba(0, 240, 255, 0.2);
+        }
+
+        .btn-cyan { background: linear-gradient(135deg, #00f0ff, #0284c7); color: #020617; box-shadow: 0 0 18px rgba(0, 240, 255, 0.3); }
+        .btn-pink { background: linear-gradient(135deg, #ff2a85, #be185d); color: #ffffff; box-shadow: 0 0 18px rgba(255, 42, 133, 0.3); }
+        .btn-amber { background: linear-gradient(135deg, #fbbf24, #d97706); color: #020617; box-shadow: 0 0 18px rgba(251, 191, 36, 0.3); }
+        .btn-emerald { background: linear-gradient(135deg, #10b981, #059669); color: #020617; box-shadow: 0 0 18px rgba(16, 185, 129, 0.3); }
+        .btn-purple { background: linear-gradient(135deg, #a855f7, #7e22ce); color: #ffffff; box-shadow: 0 0 18px rgba(168, 85, 247, 0.3); }
+        .btn-orange { background: linear-gradient(135deg, #f97316, #c2410c); color: #ffffff; box-shadow: 0 0 18px rgba(249, 115, 22, 0.3); }
+        .btn-blue { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: #ffffff; box-shadow: 0 0 18px rgba(59, 130, 246, 0.3); }
+        .btn-rose { background: linear-gradient(135deg, #f43f5e, #be123c); color: #ffffff; box-shadow: 0 0 18px rgba(244, 63, 94, 0.3); }
+
+        .play-btn { transition: all 0.2s ease; }
+        .play-btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #060810; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 9999px; }
+    </style>
+</head>
+<body class="min-h-screen cyber-grid flex flex-col selection:bg-cyan-400 selection:text-slate-950">
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- Optional Live Announcement Banner -->
+    <div id="announcementBar" class="bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 border-b border-cyan-500/30 px-4 py-2 text-center text-xs sm:text-sm font-medium text-cyan-200">
+        <span id="announcementText">Fuck Royce Cook</span>
+    </div>
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-30 border-b border-white/10 bg-[#060810]/85 backdrop-blur-md">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 via-blue-500 to-pink-500 p-[1.5px] shadow-lg shadow-cyan-500/20 shrink-0">
+                    <div class="w-full h-full bg-[#090d16] rounded-[10px] flex items-center justify-center">
+                        <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M14 10l-2 1m0 0l-2-1m2 1v2.5M20 7l-2 1m2-1l-2-1m2 1v2.5M14 4l-2-1-2 1M4 7l2-1M4 7l2 1M4 7v2.5M12 21l-2-1m2 1l2-1m-2 1v-2.5M6 18l-2-1v-2.5M18 18l2-1v-2.5"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div class="truncate">
+                    <h1 class="font-display font-extrabold text-base sm:text-xl tracking-wider text-white flex items-center gap-2 truncate">
+                        <span id="brandTitleMain">NEXUS</span> <span id="brandTitleAccent" class="text-cyan-400">ARCADE</span>
+                        <span id="slotCountBadge" class="hidden md:inline-block text-[10px] font-sans font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">8 Games</span>
+                    </h1>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-2 sm:gap-2.5 shrink-0">
+                <button onclick="openAddGameQuick()" class="px-3 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/35 text-xs sm:text-sm font-semibold text-emerald-300 flex items-center gap-1.5 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Add Game</span>
+                </button>
+
+                <button onclick="openSetupModal('slots')" class="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs sm:text-sm font-medium text-slate-200 flex items-center gap-2 transition">
+                    <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="hidden md:inline">Manage &amp; GitHub Sync</span>
+                    <span class="md:hidden">Manage</span>
+                </button>
+
+                <button onclick="launchRandomGame()" class="btn-cyan play-btn px-3.5 py-2 rounded-xl font-display font-bold text-xs sm:text-sm tracking-wide flex items-center gap-1.5">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
+                    </svg>
+                    <span>RANDOM</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Menu Container -->
+    <main class="flex-1 max-w-[1400px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-7 space-y-7">
+
+        <!-- Hero Welcome Banner -->
+        <section class="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#0f172a]/95 via-[#111827]/95 to-[#1e1b4b]/85 p-6 sm:p-8 shadow-2xl">
+            <div class="absolute -right-20 -top-20 w-72 h-72 bg-cyan-500/15 rounded-full blur-3xl pointer-events-none"></div>
+            <div class="absolute -left-20 -bottom-20 w-72 h-72 bg-pink-500/15 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div class="max-w-2xl space-y-2.5">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-xs font-semibold text-cyan-300">
+                        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                        <span id="heroBadgeText">GitHub Pages Live Arcade Hub</span>
+                    </div>
+                    <h2 id="heroHeadline" class="font-display text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">
+                        SELECT A GAME TO <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-pink-500">LAUNCH</span>
+                    </h2>
+                    <p id="heroSubtitle" class="text-slate-300 text-xs sm:text-sm leading-relaxed">Click any game card below to launch immediately in fullscreen. Use + Add Game or Manage &amp; GitHub Sync to add extra games, customize categories, or upload new HTML builds directly to GitHub.</p>
+                </div>
+
+                <!-- Search & Status Bar -->
+                <div class="flex flex-col sm:flex-row lg:flex-col gap-3 shrink-0 w-full lg:w-80">
+                    <div class="relative">
+                        <svg class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        <input type="text" id="searchInput" oninput="renderGamesGrid()" placeholder="Search games, genres, files..." class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-black/50 border border-white/15 text-sm text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400 transition">
+                    </div>
+                    <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs">
+                        <span class="text-slate-400">Library Status:</span>
+                        <span id="statusSummary" class="font-display font-bold text-cyan-400">8 / 9 LIVE</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dynamic Category Filter Pills -->
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap items-center gap-2" id="categoryFilters"></div>
+            <button onclick="openSetupModal('site')" class="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center gap-1 transition">
+                <span>+ Customize Categories &amp; Banner</span>
+            </button>
+        </div>
+
+        <!-- Dynamic Games Grid -->
+        <section id="gamesGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"></section>
+
+    </main>
+
+    <!-- Manage & GitHub Direct Sync Modal -->
+    <div id="setupModal" class="fixed inset-0 z-40 items-center justify-center p-4 bg-black/80 backdrop-blur-md hidden">
+        <div class="bg-[#0d1220] border border-white/15 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl">
+            <!-- Modal Header & Tabs -->
+            <div class="p-5 sm:p-6 border-b border-white/10 space-y-4 shrink-0">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="font-display text-lg sm:text-xl font-bold text-white">ARCADE STUDIO &amp; GITHUB DIRECT SYNC</h3>
+                        <p class="text-xs text-slate-400 mt-1">Add extra games, customize site branding &amp; categories, or push new HTML games straight to GitHub.</p>
+                    </div>
+                    <button onclick="closeSetupModal()" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="switchModalTab('slots')" id="tabBtn-slots" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition">1. Game Slots &amp; Add Extra</button>
+                    <button onclick="switchModalTab('site')" id="tabBtn-site" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition">2. Site Branding &amp; Categories</button>
+                    <button onclick="switchModalTab('github')" id="tabBtn-github" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span>3. GitHub Direct Upload &amp; Publish</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
+
+                <!-- TAB 1: GAME SLOTS & ADD NEW GAME -->
+                <div id="modalTab-slots" class="space-y-4 hidden">
+                    <div class="flex flex-wrap items-center justify-between gap-3 bg-black/40 border border-white/10 p-4 rounded-2xl">
+                        <div>
+                            <h4 class="font-display text-sm font-bold text-white">GAME LIBRARY SLOTS (<span id="modalSlotCount">8</span> TOTAL)</h4>
+                            <p class="text-xs text-slate-400">Add unlimited games, reorder cards, set custom banner image URLs, or attach local `.html` files to test.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="addNewGameSlot()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-display font-bold text-xs flex items-center gap-1.5 transition">
+                                <span>+ ADD NEW GAME SLOT</span>
+                            </button>
+                            <button onclick="exportUpdatedIndexHtml()" class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold border border-white/15 transition">
+                                Download index.html
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="slotEditorList" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+                </div>
+
+                <!-- TAB 2: SITE BRANDING, ANNOUNCEMENT & CUSTOM CATEGORIES -->
+                <div id="modalTab-site" class="space-y-6 hidden">
+                    <div class="bg-black/40 border border-white/10 rounded-2xl p-5 space-y-4">
+                        <h4 class="font-display text-sm font-bold text-cyan-400">ARCADE HEADER &amp; ANNOUNCEMENT BANNER</h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">Brand Primary Word</label>
+                                <input type="text" id="editBrandMain" oninput="updateSiteBranding()" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-sm text-white focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">Brand Accent Word</label>
+                                <input type="text" id="editBrandAccent" oninput="updateSiteBranding()" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-sm text-cyan-300 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Welcome Subtitle Message</label>
+                            <textarea id="editHeroSubtitle" rows="2" oninput="updateSiteBranding()" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-sm text-white focus:border-cyan-400 focus:outline-none"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs text-slate-400 mb-1">Live Top Announcement Ticker (leave blank to hide)</label>
+                            <input type="text" id="editAnnouncement" oninput="updateSiteBranding()" placeholder="e.g., NEW UPDATE: Game 9 just dropped! Check it out below." class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-sm text-amber-200 focus:border-cyan-400 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <!-- Custom Category Manager -->
+                    <div class="bg-black/40 border border-white/10 rounded-2xl p-5 space-y-4">
+                        <div>
+                            <h4 class="font-display text-sm font-bold text-pink-400">CUSTOM CATEGORY FILTER TABS</h4>
+                            <p class="text-xs text-slate-400 mt-0.5">Add extra category tabs (such as Horror, Racing, Card Games, Multiplayer) so players can filter your growing library.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="newCategoryInput" placeholder="New category name (e.g. Horror)" class="flex-1 px-3.5 py-2 rounded-xl bg-[#090d16] border border-white/15 text-sm text-white focus:border-cyan-400 focus:outline-none">
+                            <button onclick="addCustomCategory()" class="px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-400 text-white font-bold text-xs transition">+ Add Category</button>
+                        </div>
+                        <div id="categoryChipsEditor" class="flex flex-wrap gap-2"></div>
+                    </div>
+
+                    <div class="flex justify-between items-center pt-2">
+                        <button onclick="resetCustomConfig()" class="px-3.5 py-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-xs font-semibold text-rose-300 transition">Reset All Settings to Default</button>
+                        <button onclick="switchModalTab('github')" class="px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-display font-bold text-xs">Next: Publish to GitHub →</button>
+                    </div>
+                </div>
+
+                <!-- TAB 3: DIRECT GITHUB REPOSITORY SYNC & FILE UPLOADER -->
+                <div id="modalTab-github" class="space-y-5">
+                    <div class="bg-gradient-to-br from-emerald-950/40 to-cyan-950/30 border border-emerald-500/30 rounded-2xl p-5 space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <h4 class="font-display text-sm font-bold text-emerald-300">CONNECT YOUR GITHUB REPOSITORY</h4>
+                                <p class="text-xs text-slate-300 mt-0.5">Push new `.html` games and save your menu layout straight to GitHub from this page—no manual file downloading required.</p>
+                            </div>
+                            <span id="ghConnectionBadge" class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/50 text-slate-400 border border-white/10">Not Connected</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">GitHub Username</label>
+                                <input type="text" id="ghOwner" onchange="saveGhCreds()" placeholder="your-username" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs font-mono text-white focus:border-emerald-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Repository Name</label>
+                                <input type="text" id="ghRepo" onchange="saveGhCreds()" placeholder="arcade-hub" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs font-mono text-white focus:border-emerald-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Branch Name</label>
+                                <input type="text" id="ghBranch" value="main" onchange="saveGhCreds()" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs font-mono text-white focus:border-emerald-400 focus:outline-none">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] text-slate-300 mb-1">GitHub Personal Access Token (stored privately in your browser only)</label>
+                            <div class="flex flex-col sm:flex-row gap-2">
+                                <input type="password" id="ghToken" onchange="saveGhCreds()" placeholder="github_pat_... or ghp_..." class="flex-1 px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs font-mono text-emerald-300 focus:border-emerald-400 focus:outline-none">
+                                <button onclick="testGitHubConnection()" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shrink-0 transition">Verify Connection</button>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-1.5">
+                                Need a token? In GitHub go to <strong>Settings → Developer settings → Personal access tokens → Fine-grained tokens</strong>, select this repository, and grant <strong>Contents: Read and write</strong>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Direct Game HTML File Uploader to GitHub -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="bg-black/45 border border-white/10 rounded-2xl p-5 space-y-3.5">
+                            <h4 class="font-display text-sm font-bold text-cyan-400">UPLOAD A NEW GAME (.HTML) TO GITHUB</h4>
+                            <p class="text-xs text-slate-400">Pick any `.html` game file from your device—this will upload it straight to your GitHub repo and add a playable card to your hub!</p>
+
+                            <div>
+                                <label class="block text-[11px] text-slate-300 mb-1">Select Game `.html` File</label>
+                                <input type="file" id="ghUploadFileInput" accept=".html,.htm" onchange="onSelectGhGameFile(this)" class="w-full text-xs text-slate-300 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="block text-[11px] text-slate-300 mb-1">Game Title on Hub</label>
+                                    <input type="text" id="ghNewGameTitle" placeholder="e.g. Space Drift 3D" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-300 mb-1">Target Filename in Repo</label>
+                                    <input type="text" id="ghNewGameFilename" placeholder="game9.html" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs font-mono text-cyan-300 focus:border-cyan-400 focus:outline-none">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <div>
+                                    <label class="block text-[11px] text-slate-300 mb-1">Genre Tag</label>
+                                    <input type="text" id="ghNewGameGenre" value="Arcade 3D" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-300 mb-1">Category</label>
+                                    <select id="ghNewGameCategory" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none"><option value="Action">Action</option><option value="Arcade">Arcade</option><option value="Strategy">Strategy</option></select>
+                                </div>
+                            </div>
+
+                            <button onclick="uploadGameAndPublishToGitHub()" id="btnUploadGameGh" class="w-full py-2.5 px-4 rounded-xl btn-cyan font-display font-bold text-xs tracking-wider">
+                                UPLOAD GAME &amp; UPDATE HUB ON GITHUB
+                            </button>
+                        </div>
+
+                        <!-- Publish Menu Changes to GitHub index.html -->
+                        <div class="bg-black/45 border border-white/10 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                            <div class="space-y-2.5">
+                                <h4 class="font-display text-sm font-bold text-amber-400">PUBLISH MENU CHANGES TO GITHUB</h4>
+                                <p class="text-xs text-slate-400 leading-relaxed">
+                                    Edited game titles, added extra slots, changed descriptions, or updated your announcement banner? Click below to commit the updated <code class="text-white font-mono">index.html</code> directly to your GitHub repository so all visitors see your changes.
+                                </p>
+                                <div id="ghSyncLog" class="p-3 rounded-xl bg-[#060810] border border-white/10 text-[11px] font-mono text-slate-400 min-h-[84px] max-h-32 overflow-y-auto">
+                                    Ready to sync with GitHub API.
+                                </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <button onclick="publishIndexHtmlToGitHub()" id="btnPublishIndexGh" class="w-full py-2.5 px-4 rounded-xl btn-amber font-display font-bold text-xs tracking-wider">
+                                    SAVE &amp; PUBLISH INDEX.HTML TO GITHUB
+                                </button>
+                                <button onclick="exportUpdatedIndexHtml()" class="w-full py-2 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 transition">
+                                    Or Download index.html Manually
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Game Player Overlay -->
+    <div id="playerOverlay" class="fixed inset-0 z-50 flex-col bg-[#04060b] hidden">
+        <!-- Top Control Bar -->
+        <div class="h-14 px-4 bg-[#0a0e1a] border-b border-white/10 flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+                <button onclick="exitPlayer()" class="px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-rose-500/25 hover:text-rose-200 hover:border-rose-500/40 border border-white/10 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shrink-0 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    <span>Back to Menu</span>
+                </button>
+                <div class="h-5 w-[1px] bg-white/10 shrink-0"></div>
+                <div class="truncate">
+                    <span id="activeGameTitle" class="font-display font-bold text-sm sm:text-base text-cyan-400">CARD GAMES</span>
+                    <span id="activeGameFile" class="hidden sm:inline-block ml-2 text-xs font-mono text-slate-400">(game4.html)</span>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <button onclick="reloadActiveGame()" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-cyan-500/20 hover:text-cyan-200 border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 transition" title="Reload Game">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span class="hidden sm:inline">Reload</span>
+                </button>
+                <a id="openNewTabLink" href="game4.html" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold hidden sm:flex items-center gap-1.5 transition" title="Open Game Directly in New Tab">
+                    <span>New Tab</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                    </svg>
+                </a>
+                <button onclick="toggleBrowserFullscreen()" title="Fullscreen" class="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Sandboxed Game Iframe + Missing File Fallback Banner -->
+        <div class="relative flex-1 w-full h-full overflow-hidden bg-black">
+            <iframe id="gameIframe" class="w-full h-full border-0" sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-popups" src="about:blank"></iframe>
+
+            <!-- Friendly Notice Shown Only If File Returns 404 / Not Uploaded Yet -->
+            <div id="missingFileNotice" class="hidden absolute inset-0 bg-[#060810]/95 backdrop-blur-md flex items-center justify-center p-6 text-center z-10">
+                <div class="max-w-md bg-[#0e1526] border border-amber-500/40 rounded-3xl p-7 space-y-4 shadow-2xl">
+                    <div class="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                        </svg>
+                    </div>
+                    <h3 class="font-display text-lg font-bold text-white">GAME FILE NOT UPLOADED YET</h3>
+                    <p class="text-sm text-slate-300 leading-relaxed">
+                        Could not find <code id="missingFileName" class="text-amber-300 font-mono bg-black/50 px-2 py-0.5 rounded">game4.html</code> in this repository folder yet.
+                    </p>
+                    <p class="text-xs text-slate-400">
+                        Upload your game file to GitHub with that exact filename (or use <strong>Manage → GitHub Direct Upload</strong>) to play!
+                    </p>
+                    <div class="pt-2 flex justify-center gap-3">
+                        <button onclick="exitPlayer()" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-display font-bold text-xs tracking-wide">
+                            RETURN TO MENU
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="border-t border-white/10 py-5 mt-10 bg-[#05070d]">
+        <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
+            <div>NEXUS ARCADE • Dynamic GitHub Pages Hub (<code class="text-slate-400">index.html</code>)</div>
+            <div id="footerSlotCount">8 Game Slots Configured</div>
+        </div>
+    </footer>
+
+    <script>
+        /* =========================================================================
+           SITE & GAMES CONFIGURATION (Auto-updated when you publish to GitHub!)
+           ========================================================================= */
+        const DEFAULT_SITE_CONFIG = {
+          "brandMain": "NEXUS",
+          "brandAccent": "ARCADE",
+          "subtitle": "Click any game card below to launch immediately in fullscreen. Use + Add Game or Manage & GitHub Sync to add extra games, customize categories, or upload new HTML builds directly to GitHub.",
+          "announcement": "Fuck Royce Cook",
+          "categories": [
+                    "Action",
+                    "Arcade",
+                    "Strategy"
+          ],
+          "games": [
+                    {
+                              "slot": 1,
+                              "file": "game1.html",
+                              "title": "The Long Frost 3d",
+                              "genre": "3D FPS Shooter",
+                              "category": "Action",
+                              "theme": "cyan",
+                              "bannerUrl": "",
+                              "description": "First-person 3D monster arena shooter. Survive the frozen outpost."
+                    },
+                    {
+                              "slot": 2,
+                              "file": "game2.html",
+                              "title": "Last One Standing",
+                              "genre": "Open-World Action",
+                              "category": "Arcade",
+                              "theme": "pink",
+                              "bannerUrl": "",
+                              "description": "High-speed neon city driving and tactical survival sandbox."
+                    },
+                    {
+                              "slot": 3,
+                              "file": "game3.html",
+                              "title": "Apex Formula",
+                              "genre": "Battle Royale",
+                              "category": "Strategy",
+                              "theme": "amber",
+                              "bannerUrl": "",
+                              "description": "High-precision racing and competitive track mastery."
+                    },
+                    {
+                              "slot": 4,
+                              "file": "game4.html",
+                              "title": "Card Games",
+                              "genre": "Space Arcade",
+                              "category": "Arcade",
+                              "theme": "emerald",
+                              "bannerUrl": "",
+                              "description": "Classic and custom tabletop card battles in your browser."
+                    },
+                    {
+                              "slot": 5,
+                              "file": "game5.html",
+                              "title": "Vice Coast 3d",
+                              "genre": "Neon Racing",
+                              "category": "Arcade",
+                              "theme": "purple",
+                              "bannerUrl": "",
+                              "description": "Explore the coastal metropolis in full 3D freedom."
+                    },
+                    {
+                              "slot": 6,
+                              "file": "game6.html",
+                              "title": "Monster Mayhem",
+                              "genre": "Tactical Action",
+                              "category": "Action",
+                              "theme": "blue",
+                              "bannerUrl": "",
+                              "description": "Battle waves of relentless creatures with heavy firepower."
+                    },
+                    {
+                              "slot": 7,
+                              "file": "game7.html",
+                              "title": "Vice Coast City",
+                              "genre": "Tower Defense",
+                              "category": "Strategy",
+                              "theme": "orange",
+                              "bannerUrl": "",
+                              "description": "Urban sandbox action across downtown Vice Coast."
+                    },
+                    {
+                              "slot": 8,
+                              "file": "game8.html",
+                              "title": "Wilderness Hunter",
+                              "genre": "Arcade Survival",
+                              "category": "Action",
+                              "theme": "rose",
+                              "bannerUrl": "",
+                              "description": "Track targets and survive the untamed frontier."
+                    }
+          ]
+};
+
+        const THEME_STYLES = {
+            cyan:    { badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30', btn: 'btn-cyan', c1: '#083344', c2: '#00f0ff' },
+            pink:    { badge: 'bg-pink-500/15 text-pink-300 border-pink-500/30', btn: 'btn-pink', c1: '#4c0519', c2: '#ff2a85' },
+            amber:   { badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30', btn: 'btn-amber', c1: '#451a03', c2: '#fbbf24' },
+            emerald: { badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', btn: 'btn-emerald', c1: '#022c22', c2: '#10b981' },
+            purple:  { badge: 'bg-purple-500/15 text-purple-300 border-purple-500/30', btn: 'btn-purple', c1: '#2e1065', c2: '#a855f7' },
+            blue:    { badge: 'bg-blue-500/15 text-blue-300 border-blue-500/30', btn: 'btn-blue', c1: '#172554', c2: '#3b82f6' },
+            orange:  { badge: 'bg-orange-500/15 text-orange-300 border-orange-500/30', btn: 'btn-orange', c1: '#431407', c2: '#f97316' },
+            rose:    { badge: 'bg-rose-500/15 text-rose-300 border-rose-500/30', btn: 'btn-rose', c1: '#4c0519', c2: '#f43f5e' }
+        };
+        const THEME_KEYS = Object.keys(THEME_STYLES);
+
+        let siteConfig = loadConfig();
+        let fileAvailability = {};
+        let localTestUrls = {};
+        let currentCategory = 'all';
+        let activeGame = null;
+
+        function loadConfig() {
+            try {
+                const saved = localStorage.getItem('nexus_arcade_cms_v2');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed && Array.isArray(parsed.games)) return parsed;
+                }
+            } catch (e) {}
+            return JSON.parse(JSON.stringify(DEFAULT_SITE_CONFIG));
+        }
+
+        function saveConfig() {
+            try {
+                localStorage.setItem('nexus_arcade_cms_v2', JSON.stringify(siteConfig));
+            } catch (e) {}
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toastContainer');
+            const el = document.createElement('div');
+            el.className = 'pointer-events-auto px-4 py-2.5 rounded-2xl bg-slate-900/95 border border-cyan-500/40 text-cyan-200 text-xs sm:text-sm font-medium shadow-xl flex items-center gap-2 transition-opacity duration-300';
+            el.innerHTML = `<span class="w-2 h-2 rounded-full bg-cyan-400"></span><span>${escapeHtml(msg)}</span>`;
+            container.appendChild(el);
+            setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+        }
+
+        function applySiteBranding() {
+            document.getElementById('brandTitleMain').textContent = siteConfig.brandMain || 'NEXUS';
+            document.getElementById('brandTitleAccent').textContent = siteConfig.brandAccent || 'ARCADE';
+            document.getElementById('heroSubtitle').textContent = siteConfig.subtitle || '';
+            document.title = `${siteConfig.brandMain || 'NEXUS'} ${siteConfig.brandAccent || 'ARCADE'} // Hub`;
+
+            const annBar = document.getElementById('announcementBar');
+            const annText = document.getElementById('announcementText');
+            if (siteConfig.announcement && siteConfig.announcement.trim()) {
+                annText.textContent = siteConfig.announcement.trim();
+                annBar.classList.remove('hidden');
+            } else {
+                annBar.classList.add('hidden');
+            }
+
+            const total = siteConfig.games.length;
+            document.getElementById('slotCountBadge').textContent = `${total} Games`;
+            document.getElementById('footerSlotCount').textContent = `${total} Game Slots Configured`;
+        }
+
+        async function probeUploadedGames() {
+            const total = siteConfig.games.length;
+            if (window.location.protocol === 'file:') {
+                document.getElementById('statusSummary').textContent = `${total} SLOTS CONFIGURED`;
+                renderGamesGrid();
+                return;
+            }
+            let foundCount = 0;
+            await Promise.all(siteConfig.games.map(async (g, idx) => {
+                try {
+                    const res = await fetch(g.file, { method: 'HEAD', cache: 'no-store' });
+                    fileAvailability[idx] = res.ok;
+                    if (res.ok) foundCount++;
+                } catch (e) {
+                    fileAvailability[idx] = false;
+                }
+            }));
+            document.getElementById('statusSummary').textContent = `${foundCount} / ${total} LIVE`;
+            renderGamesGrid();
+        }
+
+        function generateCardArt(index, game, c1, c2) {
+            if (game.bannerUrl && game.bannerUrl.trim()) {
+                return `<img src="${escapeHtml(game.bannerUrl.trim())}" alt="${escapeHtml(game.title)}" class="w-full h-full object-cover" onerror="this.style.display='none'">`;
+            }
+            const slotLabel = String(index + 1).padStart(2, '0');
+            const patterns = [
+                `<circle cx="200" cy="80" r="36" stroke="${c2}" stroke-width="2" fill="none" opacity="0.8"/><circle cx="200" cy="80" r="6" fill="${c2}"/><line x1="145" y1="80" x2="255" y2="80" stroke="${c2}" stroke-width="1.5" opacity="0.6"/>`,
+                `<polygon points="200,32 238,118 200,102 162,118" fill="${c2}" opacity="0.85"/><circle cx="200" cy="80" r="52" stroke="${c2}" stroke-width="1.5" stroke-dasharray="6 6" fill="none" opacity="0.5"/>`,
+                `<rect x="155" y="42" width="90" height="76" rx="14" stroke="${c2}" stroke-width="2.5" fill="none" opacity="0.8"/><polygon points="188,64 222,80 188,96" fill="${c2}"/>`,
+                `<circle cx="130" cy="85" r="28" fill="${c2}" opacity="0.25"/><circle cx="270" cy="70" r="38" fill="${c2}" opacity="0.2"/><path d="M80 120 Q200 30 320 120" stroke="${c2}" stroke-width="3" fill="none"/>`
+            ];
+            const art = patterns[index % patterns.length];
+            return `
+                <svg viewBox="0 0 400 155" class="w-full h-full object-cover">
+                    <defs>
+                        <linearGradient id="grad-${index}" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="${c1}"/>
+                            <stop offset="60%" stop-color="#0b1120"/>
+                            <stop offset="100%" stop-color="#060810"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="400" height="155" fill="url(#grad-${index})"/>
+                    <text x="368" y="135" text-anchor="end" font-family="Orbitron, sans-serif" font-weight="900" font-size="72" fill="${c2}" opacity="0.09">${slotLabel}</text>
+                    ${art}
+                </svg>
+            `;
+        }
+
+        function renderCategoryTabs() {
+            const container = document.getElementById('categoryFilters');
+            const cats = ['all', ...(siteConfig.categories || [])];
+            container.innerHTML = cats.map(cat => {
+                const isAll = cat === 'all';
+                const active = currentCategory === cat;
+                const label = isAll ? `All (${siteConfig.games.length})` : escapeHtml(cat);
+                const cls = active
+                    ? 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-cyan-500 text-slate-950 transition'
+                    : 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition';
+                return `<button onclick="setFilter('${escapeHtml(cat)}')" class="${cls}">${label}</button>`;
+            }).join('');
+        }
+
+        function setFilter(cat) {
+            currentCategory = cat;
+            renderCategoryTabs();
+            renderGamesGrid();
+        }
+
+        function renderGamesGrid() {
+            const grid = document.getElementById('gamesGrid');
+            const query = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+
+            const indexedGames = siteConfig.games.map((g, idx) => ({ ...g, _idx: idx }));
+            const filtered = indexedGames.filter(g => {
+                const matchCat = currentCategory === 'all' || g.category === currentCategory;
+                const matchQuery = !query ||
+                    g.title.toLowerCase().includes(query) ||
+                    g.genre.toLowerCase().includes(query) ||
+                    (g.description || '').toLowerCase().includes(query) ||
+                    g.file.toLowerCase().includes(query);
+                return matchCat && matchQuery;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-12 text-slate-400 text-sm">No games match your current filter.</div>`;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(g => {
+                const idx = g._idx;
+                const slotLabel = String(idx + 1).padStart(2, '0');
+                const st = THEME_STYLES[g.theme] || THEME_STYLES.cyan;
+                const hasLocalTest = Boolean(localTestUrls[idx]);
+                const isUploaded = fileAvailability[idx] === true;
+
+                let statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-black/60 text-slate-300 border border-white/15 backdrop-blur-md">${escapeHtml(g.file)}</span>`;
+                if (hasLocalTest) {
+                    statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 backdrop-blur-md"><span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>Local Test</span>`;
+                } else if (isUploaded) {
+                    statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 backdrop-blur-md"><span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>Live (${escapeHtml(g.file)})</span>`;
+                }
+
+                return `
+                    <article class="game-card rounded-3xl overflow-hidden flex flex-col justify-between">
+                        <div>
+                            <div class="relative h-36 w-full overflow-hidden border-b border-white/10 bg-[#080c16]">
+                                ${generateCardArt(idx, g, st.c1, st.c2)}
+                                <div class="absolute inset-0 bg-gradient-to-t from-[#0d1220] via-transparent to-black/25"></div>
+                                <div class="absolute top-3 left-3 right-3 flex items-center justify-between gap-2">
+                                    <span class="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border backdrop-blur-md truncate ${st.badge}">
+                                        #${slotLabel} • ${escapeHtml(g.genre)}
+                                    </span>
+                                </div>
+                                <div class="absolute bottom-2.5 right-3">
+                                    ${statusBadge}
+                                </div>
+                            </div>
+
+                            <div class="p-5 space-y-2">
+                                <h3 class="font-display text-base sm:text-lg font-bold text-white leading-snug">${escapeHtml(g.title)}</h3>
+                                <p class="text-xs text-slate-400 leading-relaxed line-clamp-2">${escapeHtml(g.description || '')}</p>
+                            </div>
+                        </div>
+
+                        <div class="px-5 pb-5 pt-1">
+                            <button onclick="launchGameByIndex(${idx})" class="w-full ${st.btn} play-btn py-2.5 px-4 rounded-xl font-display font-bold text-xs tracking-wider flex items-center justify-center gap-2">
+                                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
+                                </svg>
+                                <span>PLAY GAME</span>
+                            </button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function launchGameByIndex(idx) {
+            const game = siteConfig.games[idx];
+            if (!game) return;
+            activeGame = { ...game, _idx: idx };
+
+            const targetUrl = localTestUrls[idx] || game.file;
+            document.getElementById('activeGameTitle').textContent = game.title.toUpperCase();
+            document.getElementById('activeGameFile').textContent = `(${game.file})`;
+            document.getElementById('openNewTabLink').href = targetUrl;
+
+            const missingNotice = document.getElementById('missingFileNotice');
+            missingNotice.classList.add('hidden');
+            document.getElementById('missingFileName').textContent = game.file;
+
+            const iframe = document.getElementById('gameIframe');
+            iframe.src = targetUrl;
+
+            iframe.onload = () => {
+                try {
+                    const docTitle = (iframe.contentDocument && iframe.contentDocument.title || '').toLowerCase();
+                    if (docTitle.includes('page not found') || docTitle.includes('404')) {
+                        missingNotice.classList.remove('hidden');
+                    }
+                } catch (e) {}
+            };
+
+            const overlay = document.getElementById('playerOverlay');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+        }
+
+        function launchRandomGame() {
+            if (siteConfig.games.length === 0) return;
+            const uploadedIndices = siteConfig.games
+                .map((_, idx) => idx)
+                .filter(idx => fileAvailability[idx] || localTestUrls[idx]);
+            const pool = uploadedIndices.length > 0 ? uploadedIndices : siteConfig.games.map((_, i) => i);
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            launchGameByIndex(pick);
+        }
+
+        function reloadActiveGame() {
+            if (!activeGame) return;
+            const iframe = document.getElementById('gameIframe');
+            iframe.src = localTestUrls[activeGame._idx] || activeGame.file;
+            showToast(`Reloaded ${activeGame.file}`);
+        }
+
+        function exitPlayer() {
+            const overlay = document.getElementById('playerOverlay');
+            const iframe = document.getElementById('gameIframe');
+            iframe.src = 'about:blank';
+            activeGame = null;
+            overlay.classList.add('hidden');
+            overlay.classList.remove('flex');
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        function toggleBrowserFullscreen() {
+            const overlay = document.getElementById('playerOverlay');
+            if (!document.fullscreenElement) {
+                overlay.requestFullscreen().catch(() => showToast('Fullscreen blocked by browser settings.'));
+            } else {
+                document.exitFullscreen().catch(() => {});
+            }
+        }
+
+        /* =========================================================================
+           MODAL TABS, ADD/REMOVE/REORDER GAMES & SITE CUSTOMIZATION
+           ========================================================================= */
+        function openAddGameQuick() {
+            addNewGameSlot();
+            openSetupModal('slots');
+        }
+
+        function openSetupModal(tab = 'slots') {
+            populateSiteEditorFields();
+            renderSlotEditor();
+            loadGhCredsToForm();
+            switchModalTab(tab);
+            const modal = document.getElementById('setupModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeSetupModal() {
+            const modal = document.getElementById('setupModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function switchModalTab(tabName) {
+            ['slots', 'site', 'github'].forEach(t => {
+                const panel = document.getElementById(`modalTab-${t}`);
+                const btn = document.getElementById(`tabBtn-${t}`);
+                if (t === tabName) {
+                    panel.classList.remove('hidden');
+                    btn.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition';
+                } else {
+                    panel.classList.add('hidden');
+                    btn.className = 'px-3.5 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition';
+                }
+            });
+            if (tabName === 'github') {
+                populateGhCategorySelect();
+                const nextNum = siteConfig.games.length + 1;
+                if (!document.getElementById('ghNewGameFilename').value) {
+                    document.getElementById('ghNewGameFilename').value = `game${nextNum}.html`;
+                }
+            }
+        }
+
+        function addNewGameSlot() {
+            const nextNum = siteConfig.games.length + 1;
+            const theme = THEME_KEYS[(nextNum - 1) % THEME_KEYS.length];
+            const defaultCat = (siteConfig.categories && siteConfig.categories[0]) || 'Action';
+            siteConfig.games.push({
+                slot: nextNum,
+                file: `game${nextNum}.html`,
+                title: `New Game #${nextNum}`,
+                genre: 'Arcade 3D',
+                category: defaultCat,
+                theme: theme,
+                bannerUrl: '',
+                description: `Custom HTML5 game hosted at game${nextNum}.html.`
+            });
+            saveConfig();
+            applySiteBranding();
+            renderCategoryTabs();
+            renderGamesGrid();
+            renderSlotEditor();
+            showToast(`Added Game Slot #${nextNum}!`);
+        }
+
+        function deleteGameSlot(idx) {
+            if (siteConfig.games.length <= 1) {
+                showToast('You must keep at least 1 game slot.');
+                return;
+            }
+            const removed = siteConfig.games.splice(idx, 1)[0];
+            delete localTestUrls[idx];
+            saveConfig();
+            applySiteBranding();
+            renderCategoryTabs();
+            renderGamesGrid();
+            renderSlotEditor();
+            showToast(`Removed "${removed.title}"`);
+        }
+
+        function moveGameSlot(idx, dir) {
+            const target = idx + dir;
+            if (target < 0 || target >= siteConfig.games.length) return;
+            const temp = siteConfig.games[idx];
+            siteConfig.games[idx] = siteConfig.games[target];
+            siteConfig.games[target] = temp;
+            saveConfig();
+            renderGamesGrid();
+            renderSlotEditor();
+        }
+
+        function renderSlotEditor() {
+            document.getElementById('modalSlotCount').textContent = siteConfig.games.length;
+            const list = document.getElementById('slotEditorList');
+            const cats = siteConfig.categories || ['Action', 'Arcade', 'Strategy'];
+
+            list.innerHTML = siteConfig.games.map((g, idx) => {
+                const slotNum = String(idx + 1).padStart(2, '0');
+                const catOptions = cats.map(c => `<option value="${escapeHtml(c)}" ${g.category === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+                const themeOptions = THEME_KEYS.map(tk => `<option value="${tk}" ${g.theme === tk ? 'selected' : ''}>${tk.toUpperCase()}</option>`).join('');
+
+                return `
+                    <div class="p-4 rounded-2xl bg-black/45 border border-white/10 space-y-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5">
+                                <span class="font-display text-xs font-bold text-cyan-400">SLOT #${slotNum}</span>
+                                <button onclick="moveGameSlot(${idx}, -1)" title="Move Up" class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/15 text-[10px] text-slate-300">&uarr;</button>
+                                <button onclick="moveGameSlot(${idx}, 1)" title="Move Down" class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/15 text-[10px] text-slate-300">&darr;</button>
+                            </div>
+                            <div class="flex items-center gap-1.5">
+                                <label class="cursor-pointer px-2.5 py-1 rounded-lg bg-white/5 hover:bg-cyan-500/20 border border-white/10 text-[11px] font-semibold text-slate-300 hover:text-cyan-200 transition">
+                                    ${localTestUrls[idx] ? '✓ Local File' : 'Test Local .html'}
+                                    <input type="file" accept=".html,.htm" class="hidden" onchange="attachLocalTestFile(${idx}, this)">
+                                </label>
+                                <button onclick="deleteGameSlot(${idx})" title="Delete Slot" class="px-2 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/25 text-[11px] font-bold text-rose-300 transition">✕</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">Game Title</label>
+                                <input type="text" value="${escapeHtml(g.title)}" onchange="updateSlotField(${idx}, 'title', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">GitHub Filename</label>
+                                <input type="text" value="${escapeHtml(g.file)}" onchange="updateSlotField(${idx}, 'file', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs font-mono text-cyan-300 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-2">
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">Genre</label>
+                                <input type="text" value="${escapeHtml(g.genre)}" onchange="updateSlotField(${idx}, 'genre', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">Category</label>
+                                <select onchange="updateSlotField(${idx}, 'category', this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                                    ${catOptions}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">Color</label>
+                                <select onchange="updateSlotField(${idx}, 'theme', this.value)" class="w-full px-2 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none">
+                                    ${themeOptions}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">Description</label>
+                                <input type="text" value="${escapeHtml(g.description || '')}" onchange="updateSlotField(${idx}, 'description', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] uppercase text-slate-400 mb-1">Custom Cover Image URL (Optional)</label>
+                                <input type="text" value="${escapeHtml(g.bannerUrl || '')}" placeholder="https://..." onchange="updateSlotField(${idx}, 'bannerUrl', this.value)" class="w-full px-2.5 py-1.5 rounded-lg bg-[#090d16] border border-white/15 text-xs text-slate-200 focus:border-cyan-400 focus:outline-none">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateSlotField(index, field, value) {
+            siteConfig.games[index][field] = value.trim();
+            saveConfig();
+            renderGamesGrid();
+            showToast(`Updated Slot #${index + 1}`);
+        }
+
+        function attachLocalTestFile(idx, inputEl) {
+            const file = inputEl.files[0];
+            if (!file) return;
+            if (localTestUrls[idx]) URL.revokeObjectURL(localTestUrls[idx]);
+            localTestUrls[idx] = URL.createObjectURL(file);
+            renderSlotEditor();
+            renderGamesGrid();
+            showToast(`Loaded "${file.name}" for local testing!`);
+        }
+
+        function populateSiteEditorFields() {
+            document.getElementById('editBrandMain').value = siteConfig.brandMain || 'NEXUS';
+            document.getElementById('editBrandAccent').value = siteConfig.brandAccent || 'ARCADE';
+            document.getElementById('editHeroSubtitle').value = siteConfig.subtitle || '';
+            document.getElementById('editAnnouncement').value = siteConfig.announcement || '';
+            renderCategoryChipsEditor();
+        }
+
+        function updateSiteBranding() {
+            siteConfig.brandMain = document.getElementById('editBrandMain').value;
+            siteConfig.brandAccent = document.getElementById('editBrandAccent').value;
+            siteConfig.subtitle = document.getElementById('editHeroSubtitle').value;
+            siteConfig.announcement = document.getElementById('editAnnouncement').value;
+            saveConfig();
+            applySiteBranding();
+        }
+
+        function renderCategoryChipsEditor() {
+            const container = document.getElementById('categoryChipsEditor');
+            container.innerHTML = (siteConfig.categories || []).map((cat, idx) => `
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/15 text-xs font-semibold text-slate-200">
+                    <span>${escapeHtml(cat)}</span>
+                    <button onclick="removeCustomCategory(${idx})" class="text-rose-400 hover:text-rose-300 font-bold">&times;</button>
+                </span>
+            `).join('');
+        }
+
+        function addCustomCategory() {
+            const input = document.getElementById('newCategoryInput');
+            const val = input.value.trim();
+            if (!val) return;
+            if (!siteConfig.categories.includes(val)) {
+                siteConfig.categories.push(val);
+                saveConfig();
+                renderCategoryTabs();
+                renderCategoryChipsEditor();
+                renderSlotEditor();
+                showToast(`Added category "${val}"`);
+            }
+            input.value = '';
+        }
+
+        function removeCustomCategory(idx) {
+            if (siteConfig.categories.length <= 1) {
+                showToast('Keep at least 1 category.');
+                return;
+            }
+            siteConfig.categories.splice(idx, 1);
+            if (currentCategory !== 'all' && !siteConfig.categories.includes(currentCategory)) {
+                currentCategory = 'all';
+            }
+            saveConfig();
+            renderCategoryTabs();
+            renderCategoryChipsEditor();
+            renderGamesGrid();
+        }
+
+        function resetCustomConfig() {
+            siteConfig = JSON.parse(JSON.stringify(DEFAULT_SITE_CONFIG));
+            localStorage.removeItem('nexus_arcade_cms_v2');
+            applySiteBranding();
+            renderCategoryTabs();
+            populateSiteEditorFields();
+            renderSlotEditor();
+            renderGamesGrid();
+            showToast('Reset arcade settings to default.');
+        }
+
+        /* =========================================================================
+           CLEAN SERIALIZATION & DIRECT GITHUB REST API SYNC
+           ========================================================================= */
+        function buildCleanIndexHtml() {
+            // Clone the live document and strip dynamic DOM elements so exported HTML is spotless
+            const clone = document.documentElement.cloneNode(true);
+            const grid = clone.querySelector('#gamesGrid');
+            if (grid) grid.innerHTML = '';
+            const cats = clone.querySelector('#categoryFilters');
+            if (cats) cats.innerHTML = '';
+            const editor = clone.querySelector('#slotEditorList');
+            if (editor) editor.innerHTML = '';
+            const chips = clone.querySelector('#categoryChipsEditor');
+            if (chips) chips.innerHTML = '';
+            const toasts = clone.querySelector('#toastContainer');
+            if (toasts) toasts.innerHTML = '';
+            const modal = clone.querySelector('#setupModal');
+            if (modal) { modal.classList.add('hidden'); modal.classList.remove('flex'); }
+            const player = clone.querySelector('#playerOverlay');
+            if (player) { player.classList.add('hidden'); player.classList.remove('flex'); }
+            const iframe = clone.querySelector('#gameIframe');
+            if (iframe) iframe.setAttribute('src', 'about:blank');
+
+            // Remove Tailwind CDN generated style tags so Tailwind regenerates cleanly on load
+            clone.querySelectorAll('style').forEach(st => {
+                if (st.textContent.includes('tailwindcss')) st.remove();
+            });
+
+            let htmlStr = '<!DOCTYPE html>\n' + clone.outerHTML;
+            const serializedConfig = JSON.stringify(siteConfig, null, 12);
+            htmlStr = htmlStr.replace(
+                /const DEFAULT_SITE_CONFIG = \{[\s\S]*?\n        \};/,
+                `const DEFAULT_SITE_CONFIG = ${serializedConfig};`
+            );
+            return htmlStr;
+        }
+
+        function exportUpdatedIndexHtml() {
+            const cleanHtml = buildCleanIndexHtml();
+            const blob = new Blob([cleanHtml], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'index.html';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Downloaded clean index.html ready for GitHub!');
+        }
+
+        function saveGhCreds() {
+            const creds = {
+                owner: document.getElementById('ghOwner').value.trim(),
+                repo: document.getElementById('ghRepo').value.trim(),
+                branch: document.getElementById('ghBranch').value.trim() || 'main',
+                token: document.getElementById('ghToken').value.trim()
+            };
+            try {
+                localStorage.setItem('nexus_gh_creds_v1', JSON.stringify(creds));
+            } catch (e) {}
+            return creds;
+        }
+
+        function loadGhCredsToForm() {
+            let creds = { owner: '', repo: '', branch: 'main', token: '' };
+            try {
+                const saved = JSON.parse(localStorage.getItem('nexus_gh_creds_v1') || '{}');
+                creds = { ...creds, ...saved };
+            } catch (e) {}
+
+            // Auto-detect owner & repo if running live on *.github.io/repo-name/
+            if (!creds.owner && window.location.hostname.endsWith('.github.io')) {
+                creds.owner = window.location.hostname.replace('.github.io', '');
+                const pathParts = window.location.pathname.split('/').filter(Boolean);
+                if (pathParts.length > 0 && !creds.repo) {
+                    creds.repo = pathParts[0];
+                }
+            }
+
+            document.getElementById('ghOwner').value = creds.owner;
+            document.getElementById('ghRepo').value = creds.repo;
+            document.getElementById('ghBranch').value = creds.branch || 'main';
+            document.getElementById('ghToken').value = creds.token;
+
+            if (creds.owner && creds.repo && creds.token) {
+                document.getElementById('ghConnectionBadge').textContent = `${creds.owner}/${creds.repo}`;
+                document.getElementById('ghConnectionBadge').className = 'px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+            }
+        }
+
+        function populateGhCategorySelect() {
+            const sel = document.getElementById('ghNewGameCategory');
+            sel.innerHTML = (siteConfig.categories || ['Action']).map(c =>
+                `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`
+            ).join('');
+        }
+
+        function onSelectGhGameFile(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const cleanName = file.name.toLowerCase().replace(/[^a-z0-9._-]/g, '-');
+            document.getElementById('ghNewGameFilename').value = cleanName;
+            if (!document.getElementById('ghNewGameTitle').value.trim()) {
+                const prettyTitle = file.name.replace(/\.html?$/i, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                document.getElementById('ghNewGameTitle').value = prettyTitle;
+            }
+        }
+
+        function logGh(msg) {
+            const box = document.getElementById('ghSyncLog');
+            const time = new Date().toLocaleTimeString();
+            box.innerHTML += `<div class="text-slate-200">[${time}] ${escapeHtml(msg)}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function utf8ToBase64(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
+        }
+
+        async function githubPutFile(creds, filePath, contentText, commitMessage) {
+            const apiUrl = `https://api.github.com/repos/${encodeURIComponent(creds.owner)}/${encodeURIComponent(creds.repo)}/contents/${encodeURIComponent(filePath)}`;
+            const headers = {
+                'Authorization': `Bearer ${creds.token}`,
+                'Accept': 'application/vnd.github+json',
+                'Content-Type': 'application/json'
+            };
+
+            // Check if file already exists to grab its SHA for updating
+            let existingSha = null;
+            const getRes = await fetch(`${apiUrl}?ref=${encodeURIComponent(creds.branch)}`, { headers });
+            if (getRes.ok) {
+                const existingData = await getRes.json();
+                existingSha = existingData.sha;
+            }
+
+            const body = {
+                message: commitMessage,
+                content: utf8ToBase64(contentText),
+                branch: creds.branch
+            };
+            if (existingSha) body.sha = existingSha;
+
+            const putRes = await fetch(apiUrl, {
+                method: 'PUT',
+                headers,
+                body: JSON.stringify(body)
+            });
+
+            if (!putRes.ok) {
+                const errJson = await putRes.json().catch(() => ({}));
+                throw new Error(errJson.message || `GitHub API Error (${putRes.status})`);
+            }
+            return await putRes.json();
+        }
+
+        async function testGitHubConnection() {
+            const creds = saveGhCreds();
+            if (!creds.owner || !creds.repo || !creds.token) {
+                showToast('Enter GitHub username, repo name, and token first.');
+                return;
+            }
+            logGh(`Connecting to ${creds.owner}/${creds.repo}...`);
+            try {
+                const res = await fetch(`https://api.github.com/repos/${encodeURIComponent(creds.owner)}/${encodeURIComponent(creds.repo)}`, {
+                    headers: {
+                        'Authorization': `Bearer ${creds.token}`,
+                        'Accept': 'application/vnd.github+json'
+                    }
+                });
+                if (!res.ok) throw new Error(`Status ${res.status} - Check repo name & token permissions`);
+                const data = await res.json();
+                document.getElementById('ghConnectionBadge').textContent = `Connected: ${data.full_name}`;
+                document.getElementById('ghConnectionBadge').className = 'px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
+                logGh(`Success! Connected to ${data.full_name}.`);
+                showToast('GitHub repository connected!');
+            } catch (err) {
+                logGh(`Error: ${err.message}`);
+                showToast(`Connection failed: ${err.message}`);
+            }
+        }
+
+        async function publishIndexHtmlToGitHub() {
+            const creds = saveGhCreds();
+            if (!creds.owner || !creds.repo || !creds.token) {
+                showToast('Please connect your GitHub repository & token above.');
+                return;
+            }
+            const btn = document.getElementById('btnPublishIndexGh');
+            btn.disabled = true;
+            btn.textContent = 'PUBLISHING TO GITHUB...';
+            try {
+                logGh('Generating clean index.html...');
+                const cleanHtml = buildCleanIndexHtml();
+                await githubPutFile(creds, 'index.html', cleanHtml, 'Update Nexus Arcade menu via live hub');
+                logGh('Published index.html! GitHub Pages will update in ~60 seconds.');
+                showToast('Published index.html to GitHub!');
+            } catch (err) {
+                logGh(`Publish failed: ${err.message}`);
+                showToast(`Publish error: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'SAVE & PUBLISH INDEX.HTML TO GITHUB';
+            }
+        }
+
+        async function uploadGameAndPublishToGitHub() {
+            const creds = saveGhCreds();
+            if (!creds.owner || !creds.repo || !creds.token) {
+                showToast('Please enter your GitHub repo & token first.');
+                return;
+            }
+            const fileInput = document.getElementById('ghUploadFileInput');
+            const file = fileInput.files[0];
+            if (!file) {
+                showToast('Choose an .html game file to upload first.');
+                return;
+            }
+            const filename = document.getElementById('ghNewGameFilename').value.trim().toLowerCase() || `game${siteConfig.games.length + 1}.html`;
+            const title = document.getElementById('ghNewGameTitle').value.trim() || filename.replace('.html', '');
+            const genre = document.getElementById('ghNewGameGenre').value.trim() || 'Arcade 3D';
+            const category = document.getElementById('ghNewGameCategory').value || siteConfig.categories[0] || 'Action';
+
+            const btn = document.getElementById('btnUploadGameGh');
+            btn.disabled = true;
+            btn.textContent = 'UPLOADING GAME & UPDATING HUB...';
+
+            try {
+                logGh(`Reading ${file.name}...`);
+                const gameHtmlText = await file.text();
+
+                logGh(`Uploading ${filename} to GitHub...`);
+                await githubPutFile(creds, filename, gameHtmlText, `Add game ${title} (${filename})`);
+
+                // Add or update slot in siteConfig
+                const existingIdx = siteConfig.games.findIndex(g => g.file.toLowerCase() === filename);
+                const theme = THEME_KEYS[siteConfig.games.length % THEME_KEYS.length];
+                if (existingIdx >= 0) {
+                    siteConfig.games[existingIdx].title = title;
+                    siteConfig.games[existingIdx].genre = genre;
+                    siteConfig.games[existingIdx].category = category;
+                } else {
+                    siteConfig.games.push({
+                        slot: siteConfig.games.length + 1,
+                        file: filename,
+                        title: title,
+                        genre: genre,
+                        category: category,
+                        theme: theme,
+                        bannerUrl: '',
+                        description: `Play ${title} directly in your browser.`
+                    });
+                }
+                saveConfig();
+                applySiteBranding();
+                renderCategoryTabs();
+                renderGamesGrid();
+                renderSlotEditor();
+
+                logGh('Updating index.html on GitHub with new game card...');
+                const cleanHtml = buildCleanIndexHtml();
+                await githubPutFile(creds, 'index.html', cleanHtml, `Add ${title} card to Nexus Arcade menu`);
+
+                logGh(`Done! "${title}" (${filename}) is uploaded and added to your menu.`);
+                showToast(`Uploaded ${filename} & updated hub on GitHub!`);
+                fileInput.value = '';
+                document.getElementById('ghNewGameTitle').value = '';
+                document.getElementById('ghNewGameFilename').value = `game${siteConfig.games.length + 1}.html`;
+            } catch (err) {
+                logGh(`Upload error: ${err.message}`);
+                showToast(`Error: ${err.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'UPLOAD GAME & UPDATE HUB ON GITHUB';
+            }
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        window.onload = function() {
+            applySiteBranding();
+            renderCategoryTabs();
+            renderGamesGrid();
+            probeUploadedGames();
+        };
+    </script>
+
+
+</body></html>
