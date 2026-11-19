@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Clockmaker's Labyrinth | 100-Chamber 3D Escape Room</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #07060a;
+            color: #f4f1ea;
+            font-family: 'Inter', sans-serif;
+            user-select: none;
+        }
+        .font-serif-display {
+            font-family: 'Cinzel', serif;
+        }
+        .font-mono-tech {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        #game-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 1;
+        }
+        .glass-brass {
+            background: rgba(15, 13, 18, 0.86);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(217, 169, 98, 0.28);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.65);
+        }
+        .uv-vignette {
+            box-shadow: inset 0 0 130px rgba(139, 92, 246, 0.42);
+            border: 2px solid rgba(167, 139, 250, 0.35);
+        }
+        @keyframes chamber-banner-in {
+            0% { opacity: 0; transform: translate(-50%, -18px); }
+            15% { opacity: 1; transform: translate(-50%, 0); }
+            85% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -12px); }
+        }
+        .animate-chamber-banner {
+            animation: chamber-banner-in 4.2s ease-in-out forwards;
+        }
+        /* Custom sleek scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(15, 13, 18, 0.5); }
+        ::-webkit-scrollbar-thumb { background: rgba(217, 169, 98, 0.35); border-radius: 9999px; }
+    </style>
+</head>
+<body>
+
+    <!-- 3D WebGL Viewport -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- UV LENS SCREEN OVERLAY -->
+    <div id="uv-overlay" class="hidden fixed inset-0 z-10 pointer-events-none uv-vignette transition-opacity duration-300">
+        <div class="absolute top-20 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-violet-950/80 border border-violet-400/50 text-violet-200 font-mono-tech text-[11px] tracking-widest uppercase">
+            ULTRAVIOLET SPECTRUM FILTER ACTIVE [U]
+        </div>
+    </div>
+
+    <!-- CENTER CROSSHAIR & CONTEXT PROMPT -->
+    <div id="hud-crosshair" class="hidden fixed inset-0 z-20 pointer-events-none flex items-center justify-center">
+        <div class="relative flex flex-col items-center">
+            <div id="crosshair-dot" class="w-2 h-2 rounded-full bg-amber-200/80 border border-stone-900 shadow-[0_0_8px_rgba(251,191,36,0.8)] transition-all duration-150"></div>
+            <div id="interact-label" class="hidden mt-4 px-3.5 py-1.5 rounded-lg glass-brass text-xs font-medium text-amber-100 tracking-wide whitespace-nowrap flex items-center gap-2">
+                <span class="px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-400/50 font-mono-tech font-bold text-amber-300 text-[11px]">E</span>
+                <span id="interact-label-text">Inspect Object</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEAMLESS CHAMBER ENTRY ANNOUNCEMENT BANNER -->
+    <div id="chamber-banner" class="hidden fixed top-24 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center">
+        <div class="glass-brass px-7 py-3.5 rounded-2xl border border-amber-400/45">
+            <div id="banner-sub" class="font-mono-tech text-[11px] uppercase tracking-[0.25em] text-amber-400">CHAMBER 001 ENTERED</div>
+            <div id="banner-title" class="font-serif-display text-xl sm:text-2xl font-bold text-stone-100 mt-0.5">The Horologist's Antechamber</div>
+        </div>
+    </div>
+
+    <!-- TOP HUD BAR -->
+    <div id="hud-top" class="hidden fixed top-3 left-3 right-3 z-20 flex flex-wrap items-start justify-between gap-3 pointer-events-none">
+        <!-- Left: Chamber Counter & Theme -->
+        <div class="glass-brass rounded-xl px-4 py-2.5 flex items-center gap-3.5 pointer-events-auto">
+            <div class="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-400/40 flex items-center justify-center font-serif-display font-extrabold text-amber-300 text-sm">
+                <span id="hud-level-badge">001</span>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span id="hud-level-counter" class="font-mono-tech text-xs font-bold text-amber-300 tracking-wider">CHAMBER 001 / 100</span>
+                    <span class="text-stone-600">|</span>
+                    <span id="hud-timer" class="font-mono-tech text-xs text-stone-300">00:00</span>
+                </div>
+                <div id="hud-room-name" class="text-xs sm:text-sm font-semibold text-stone-100 truncate max-w-[220px] sm:max-w-xs">
+                    The Horologist's Antechamber
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Objective / Status Pill -->
+        <div id="hud-objective-pill" class="glass-brass rounded-xl px-4 py-2.5 hidden md:flex items-center gap-2.5 pointer-events-auto">
+            <span id="obj-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="hud-objective-text" class="text-xs text-stone-200 font-medium">Unseal the Vault Exit Door to advance to Chamber 002</span>
+        </div>
+
+        <!-- Right: Quick Tools & Menu -->
+        <div class="glass-brass rounded-xl p-1.5 flex items-center gap-1.5 pointer-events-auto">
+            <button onclick="toggleJournal()" title="Clue Journal [Tab]" class="px-2.5 py-1.5 rounded-lg bg-stone-900/80 hover:bg-stone-800 border border-amber-500/25 text-xs font-medium text-amber-100 transition-colors cursor-pointer">
+                Journal <span class="font-mono-tech text-[10px] text-amber-400">[Tab]</span>
+            </button>
+            <button onclick="requestProgressiveHint()" title="Progressive Hint [H]" class="px-2.5 py-1.5 rounded-lg bg-stone-900/80 hover:bg-stone-800 border border-amber-500/25 text-xs font-medium text-amber-100 transition-colors cursor-pointer">
+                Hint <span class="font-mono-tech text-[10px] text-amber-400">[H]</span>
+            </button>
+            <button onclick="openPauseMenu()" title="Chambers & Settings [P]" class="px-2.5 py-1.5 rounded-lg bg-amber-600/25 hover:bg-amber-600/40 border border-amber-400/40 text-xs font-semibold text-amber-200 transition-colors cursor-pointer">
+                100 Rooms <span class="font-mono-tech text-[10px]">[P]</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- BOTTOM INVENTORY & EQUIPMENT BAR -->
+    <div id="hud-bottom" class="hidden fixed bottom-3 left-3 right-3 z-20 flex flex-wrap items-end justify-between gap-3 pointer-events-none">
+        <!-- Left: Collected Items -->
+        <div class="glass-brass rounded-xl px-3.5 py-2 flex items-center gap-2.5 pointer-events-auto">
+            <span class="font-mono-tech text-[10px] uppercase tracking-wider text-stone-400">SATUCHEL:</span>
+            <div id="inventory-slots" class="flex items-center gap-2 text-xs">
+                <span class="text-stone-500 italic text-xs">Empty</span>
+            </div>
+        </div>
+
+        <!-- Right: Lantern, UV Lens & Audio Controls -->
+        <div class="glass-brass rounded-xl p-1.5 flex items-center gap-1.5 pointer-events-auto">
+            <button id="btn-lantern" onclick="toggleLantern()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/50 text-xs font-medium text-amber-200 transition-all cursor-pointer">
+                Lantern: ON <span class="font-mono-tech text-[10px]">[F]</span>
+            </button>
+            <button id="btn-uv" onclick="toggleUVLens()" class="px-3 py-1.5 rounded-lg bg-stone-900/80 border border-stone-700 text-xs font-medium text-stone-400 transition-all cursor-pointer">
+                UV Lens <span class="font-mono-tech text-[10px]">[U]</span>
+            </button>
+            <button id="btn-audio" onclick="toggleMute()" class="px-2.5 py-1.5 rounded-lg bg-stone-900/80 border border-stone-700 text-xs font-mono-tech text-stone-300 hover:text-white cursor-pointer">
+                SFX: ON
+            </button>
+        </div>
+    </div>
+
+    <!-- TOAST FEEDBACK -->
+    <div id="toast-box" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-none"></div>
+
+    <!-- INTERACTIVE PUZZLE MODAL (Safe, Clock, Cryptex, Breaker, Note Reader) -->
+    <div id="puzzle-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="glass-brass max-w-lg w-full rounded-2xl border border-amber-400/40 overflow-hidden shadow-2xl">
+            <div class="px-5 py-3.5 bg-stone-950/90 border-b border-amber-500/20 flex items-center justify-between">
+                <h3 id="puzzle-modal-title" class="font-serif-display text-base font-bold text-amber-200 tracking-wide">Brass Combination Safe</h3>
+                <button onclick="closePuzzleModal()" class="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 font-mono-tech text-xs text-stone-300 cursor-pointer">CLOSE [ESC]</button>
+            </div>
+            <div id="puzzle-modal-body" class="p-6">
+                <!-- Dynamic puzzle UI injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- CLUE JOURNAL MODAL [TAB] -->
+    <div id="journal-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+        <div class="glass-brass max-w-xl w-full rounded-2xl border border-amber-400/40 overflow-hidden shadow-2xl">
+            <div class="px-5 py-3.5 bg-stone-950/90 border-b border-amber-500/20 flex items-center justify-between">
+                <h3 class="font-serif-display text-base font-bold text-amber-200">Investigator's Clue Journal</h3>
+                <button onclick="toggleJournal()" class="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 font-mono-tech text-xs text-stone-300 cursor-pointer">CLOSE [TAB]</button>
+            </div>
+            <div id="journal-entries" class="p-5 max-h-[65vh] overflow-y-auto space-y-3 text-sm">
+                <!-- Collected notes & discovered clues -->
+            </div>
+        </div>
+    </div>
+
+    <!-- TITLE / PAUSE / 100-LEVEL SELECTOR OVERLAY -->
+    <div id="menu-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/90 backdrop-blur-md p-4">
+        <div class="glass-brass max-w-3xl w-full rounded-2xl p-6 sm:p-8 border border-amber-500/35 shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="text-center border-b border-amber-500/20 pb-5 mb-6">
+                <div class="inline-block px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/35 font-mono-tech text-[11px] uppercase tracking-[0.22em] text-amber-300 mb-2">
+                    100 Seamless Interconnected Chambers
+                </div>
+                <h1 class="font-serif-display text-3xl sm:text-5xl font-extrabold text-stone-100 tracking-wide">
+                    THE CLOCKMAKER'S LABYRINTH
+                </h1>
+                <p class="text-stone-400 text-xs sm:text-sm max-w-xl mx-auto mt-2 leading-relaxed">
+                    Solve intricate mechanical puzzles, uncover ultraviolet ciphers, and unseal each heavy vault door to step straight through the connecting corridor into the next chamber.
+                </p>
+            </div>
+
+            <!-- Primary Resume / Start Buttons -->
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-3 mb-6">
+                <button id="btn-primary-play" onclick="resumeOrStartCurrent()" class="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-stone-950 font-bold text-sm tracking-wider uppercase shadow-lg shadow-amber-900/40 transition-all cursor-pointer">
+                    ENTER CHAMBER 001
+                </button>
+                <button id="btn-continue-saved" onclick="continueSavedLevel()" class="hidden w-full sm:w-auto px-6 py-3.5 rounded-xl bg-stone-800 hover:bg-stone-700 border border-amber-400/40 text-amber-200 font-semibold text-sm transition-all cursor-pointer">
+                    CONTINUE SAVED CHAMBER
+                </button>
+            </div>
+
+            <!-- Controls Summary -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-6 text-xs">
+                <div class="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800">
+                    <div class="font-mono-tech font-bold text-amber-300">W A S D + Mouse</div>
+                    <div class="text-stone-400 mt-0.5">Walk & Look Around</div>
+                </div>
+                <div class="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800">
+                    <div class="font-mono-tech font-bold text-amber-300">E / Left-Click</div>
+                    <div class="text-stone-400 mt-0.5">Interact & Solve</div>
+                </div>
+                <div class="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800">
+                    <div class="font-mono-tech font-bold text-amber-300">F / U Keys</div>
+                    <div class="text-stone-400 mt-0.5">Lantern / UV Lens</div>
+                </div>
+                <div class="bg-stone-900/80 p-2.5 rounded-lg border border-stone-800">
+                    <div class="font-mono-tech font-bold text-amber-300">Tab / H Keys</div>
+                    <div class="text-stone-400 mt-0.5">Clue Journal / Hint</div>
+                </div>
+            </div>
+
+            <!-- 100-Chamber Selector Grid -->
+            <div class="bg-stone-950/75 rounded-xl p-4 border border-stone-800">
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <span class="font-serif-display text-sm font-bold text-amber-200">Labyrinth Chamber Directory (1 – 100)</span>
+                    <span id="progress-summary" class="font-mono-tech text-xs text-emerald-400">Highest Chamber Reached: 001 / 100</span>
+                </div>
+                <div id="level-grid" class="grid grid-cols-5 sm:grid-cols-10 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                    <!-- 100 Chamber buttons generated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * THE CLOCKMAKER'S LABYRINTH — 100-LEVEL SEAMLESS 3D ESCAPE ROOM ENGINE
+         * ============================================================================
+         * Core Architectural Highlights:
+         * 1. Deterministic Seeded Generator (Levels 1..100):
+         *    - Every chamber from 1 to 100 has a unique layout, architectural theme,
+         *      procedural PBR-style textures (wood, stone, iron, observatory, deco),
+         *      solvable multi-stage puzzle chain, and progressive hint list.
+         * 2. Seamless Threshold Corridor Progression:
+         *    - Chamber N sits at world Z offset, with its Exit Vault Door at its North
+         *      wall and a lit stone/brass Threshold Corridor connecting directly into
+         *      Chamber N+1 pre-built right beyond the doorway!
+         *    - When Chamber N's exit lock is solved, its heavy vault door swings open
+         *      in 3D. Walking across the threshold line seamlessly activates Chamber N+1,
+         *      closes the rear airlock door behind the player, disposes old geometry,
+         *      and pre-builds Chamber N+2 ahead—zero loading screens or menu breaks!
+         */
+
+        // --- SAVE DATA & GLOBAL STATE ---
+        const STORAGE_KEY = 'clockmakers_labyrinth_save_v1';
+        let saveData = {
+            currentLevel: 1,
+            highestLevel: 1,
+            completedLevels: []
+        };
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) saveData = { ...saveData, ...JSON.parse(raw) };
+        } catch (e) { /* Ignore storage restriction */ }
+
+        function persistSave() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+            } catch (e) { /* Ignore */ }
+        }
+
+        const state = {
+            playing: false,
+            modalOpen: false,
+            muted: false,
+            lanternOn: true,
+            uvActive: false,
+            hasUVLens: false,
+            activeLevelNum: saveData.currentLevel || 1,
+            elapsedSeconds: 0,
+            hintIndex: 0,
+            keys: {},
+            yaw: 0,
+            pitch: 0,
+            isDraggingLook: false,
+            lastMouseX: 0,
+            lastMouseY: 0,
+            bobTimer: 0,
+            stepTimer: 0,
+            hoveredObject: null
+        };
+
+        // Player Physics Collider
+        const player = {
+            pos: new THREE.Vector3(0, 1.72, 4.5),
+            vel: new THREE.Vector3(),
+            radius: 0.55,
+            height: 1.72
+        };
+
+        // --- WEB AUDIO SYNTHESIZER ---
+        class LabyrinthAudio {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            }
+
+            tone(freq, type = 'sine', duration = 0.15, vol = 0.08, delay = 0) {
+                if (state.muted || !this.ctx) return;
+                const now = this.ctx.currentTime + delay;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, now);
+                gain.gain.setValueAtTime(vol, now);
+                gain.gain.exponentialRampToValueAtTime(0.0008, now + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now);
+                osc.stop(now + duration + 0.02);
+            }
+
+            playClick() {
+                this.tone(720, 'triangle', 0.06, 0.07);
+                this.tone(420, 'sine', 0.05, 0.05, 0.02);
+            }
+
+            playStep(materialType = 'wood') {
+                if (state.muted || !this.ctx) return;
+                const base = materialType === 'iron' ? 160 : (materialType === 'stone' ? 125 : 95);
+                this.tone(base + Math.random() * 25, 'triangle', 0.08, 0.045);
+            }
+
+            playKeyPickup() {
+                this.tone(1320, 'sine', 0.14, 0.07, 0);
+                this.tone(1760, 'sine', 0.22, 0.07, 0.07);
+            }
+
+            playClockChime() {
+                [523.25, 659.25, 783.99, 1046.5].forEach((f, idx) => {
+                    this.tone(f, 'sine', 0.65, 0.08, idx * 0.18);
+                });
+            }
+
+            playVaultUnlock() {
+                this.tone(110, 'sawtooth', 0.35, 0.1, 0);
+                this.tone(146.8, 'triangle', 0.45, 0.1, 0.14);
+                this.tone(220, 'sine', 0.65, 0.11, 0.28);
+                this.tone(440, 'sine', 0.85, 0.09, 0.42);
+            }
+
+            playError() {
+                this.tone(155, 'sawtooth', 0.2, 0.08, 0);
+                this.tone(125, 'sawtooth', 0.25, 0.08, 0.12);
+            }
+        }
+
+        const audio = new LabyrinthAudio();
+
+        // --- SEEDED PRNG FOR 100 DETERMINISTIC LEVELS ---
+        function createSeededRandom(seed) {
+            let s = (seed * 9301 + 49297) % 233280;
+            return function () {
+                s = (s * 9301 + 49297) % 233280;
+                return s / 233280;
+            };
+        }
+
+        // --- PROCEDURAL CANVAS PBR-STYLE TEXTURE GENERATOR ---
+        const textureCache = {};
+        function getProceduralTexture(kind, primaryHex, secondaryHex) {
+            const key = `${kind}_${primaryHex}_${secondaryHex}`;
+            if (textureCache[key]) return textureCache[key];
+
+            const c = document.createElement('canvas');
+            c.width = 512;
+            c.height = 512;
+            const ctx = c.getContext('2d');
+
+            ctx.fillStyle = primaryHex;
+            ctx.fillRect(0, 0, 512, 512);
+
+            if (kind === 'wood') {
+                for (let y = 0; y < 512; y += 64) {
+                    ctx.fillStyle = (y / 64) % 2 === 0 ? primaryHex : secondaryHex;
+                    ctx.fillRect(0, y, 512, 62);
+                    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+                    ctx.fillRect(0, y + 62, 512, 2);
+                    for (let i = 0; i < 35; i++) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.07)';
+                        ctx.fillRect(Math.random() * 512, y + Math.random() * 60, 40 + Math.random() * 120, 2);
+                    }
+                }
+            } else if (kind === 'stone' || kind === 'marble') {
+                const rows = 8;
+                const cols = 4;
+                const rh = 512 / rows;
+                const cw = 512 / cols;
+                for (let r = 0; r < rows; r++) {
+                    const offset = (r % 2) * (cw / 2);
+                    for (let col = -1; col <= cols; col++) {
+                        ctx.fillStyle = (r + col) % 2 === 0 ? primaryHex : secondaryHex;
+                        ctx.fillRect(col * cw + offset + 2, r * rh + 2, cw - 4, rh - 4);
+                        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(col * cw + offset + 1, r * rh + 1, cw - 2, rh - 2);
+                    }
+                }
+            } else if (kind === 'damask' || kind === 'observatory') {
+                ctx.strokeStyle = secondaryHex;
+                ctx.lineWidth = 2;
+                for (let y = 32; y < 512; y += 64) {
+                    for (let x = 32; x < 512; x += 64) {
+                        ctx.beginPath();
+                        ctx.arc(x, y, 16, 0, Math.PI * 2);
+                        ctx.stroke();
+                        ctx.beginPath();
+                        ctx.moveTo(x, y - 24);
+                        ctx.lineTo(x + 24, y);
+                        ctx.lineTo(x, y + 24);
+                        ctx.lineTo(x - 24, y);
+                        ctx.closePath();
+                        ctx.stroke();
+                    }
+                }
+            } else if (kind === 'iron') {
+                ctx.strokeStyle = secondaryHex;
+                ctx.lineWidth = 4;
+                ctx.strokeRect(8, 8, 496, 496);
+                ctx.fillStyle = secondaryHex;
+                for (let p = 24; p < 500; p += 48) {
+                    ctx.beginPath(); ctx.arc(p, 20, 4, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(p, 492, 4, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(20, p, 4, 0, Math.PI * 2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(492, p, 4, 0, Math.PI * 2); ctx.fill();
+                }
+            }
+
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(3, 3);
+            textureCache[key] = tex;
+            return tex;
+        }
+
+        function createSignTexture(title, lines, isUV = false) {
+            const c = document.createElement('canvas');
+            c.width = 512;
+            c.height = 320;
+            const ctx = c.getContext('2d');
+
+            if (isUV) {
+                ctx.fillStyle = '#090612';
+                ctx.fillRect(0, 0, 512, 320);
+                ctx.strokeStyle = '#a855f7';
+                ctx.lineWidth = 6;
+                ctx.strokeRect(14, 14, 484, 292);
+                ctx.fillStyle = '#c084fc';
+                ctx.font = 'bold 30px "JetBrains Mono", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(title, 256, 72);
+                ctx.font = 'bold 42px "JetBrains Mono", monospace';
+                ctx.fillStyle = '#e9d5ff';
+                lines.forEach((line, i) => ctx.fillText(line, 256, 145 + i * 58));
+            } else {
+                ctx.fillStyle = '#e7dcc6';
+                ctx.fillRect(0, 0, 512, 320);
+                ctx.strokeStyle = '#78350f';
+                ctx.lineWidth = 8;
+                ctx.strokeRect(12, 12, 488, 296);
+                ctx.fillStyle = '#291d12';
+                ctx.font = 'bold 26px "Cinzel", serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(title, 256, 62);
+                ctx.font = '600 22px "JetBrains Mono", monospace';
+                lines.forEach((line, i) => ctx.fillText(line, 256, 122 + i * 44));
+            }
+
+            return new THREE.CanvasTexture(c);
+        }
+
+        // --- 5 ARCHITECTURAL THEMES FOR THE 100 LEVELS ---
+        const ROOM_THEMES = [
+            {
+                name: 'Victorian Clockmaker\'s Study',
+                prefix: 'Horologist\'s',
+                floorKind: 'wood', floorA: '#3d2415', floorB: '#2d190e',
+                wallKind: 'damask', wallA: '#4a1924', wallB: '#6b2737',
+                ceilingColor: 0x261710, accentColor: 0xd97706, lightColor: 0xffb76b,
+                fogColor: 0x160f0c, stepSound: 'wood'
+            },
+            {
+                name: 'Alchemist\'s Conservatory',
+                prefix: 'Apothecary',
+                floorKind: 'stone', floorA: '#1e332d', floorB: '#162622',
+                wallKind: 'stone', wallA: '#233d36', wallB: '#2f5248',
+                ceilingColor: 0x13241f, accentColor: 0x10b981, lightColor: 0x86efac,
+                fogColor: 0x0b1714, stepSound: 'stone'
+            },
+            {
+                name: 'Subterranean Brass Foundry',
+                prefix: 'Boiler Vault',
+                floorKind: 'iron', floorA: '#27272a', floorB: '#3f3f46',
+                wallKind: 'iron', wallA: '#332924', wallB: '#573c2e',
+                ceilingColor: 0x18181b, accentColor: 0xf97316, lightColor: 0xfdba74,
+                fogColor: 0x140e0b, stepSound: 'iron'
+            },
+            {
+                name: 'Celestial Observatory',
+                prefix: 'Astrolabe',
+                floorKind: 'marble', floorA: '#172038', floorB: '#1e2947',
+                wallKind: 'observatory', wallA: '#0f172a', wallB: '#1d4ed8',
+                ceilingColor: 0x090d1a, accentColor: 0x38bdf8, lightColor: 0xbae6fd,
+                fogColor: 0x070b17, stepSound: 'stone'
+            },
+            {
+                name: 'Art-Deco Bank Archives',
+                prefix: 'Sovereign Vault',
+                floorKind: 'marble', floorA: '#292524', floorB: '#44403c',
+                wallKind: 'damask', wallA: '#1c1917', wallB: '#ca8a04',
+                ceilingColor: 0x141210, accentColor: 0xfacc15, lightColor: 0xfef08a,
+                fogColor: 0x12100d, stepSound: 'stone'
+            }
+        ];
+
+        const ROOM_SUFFIXES = [
+            'Antechamber', 'Chrono-Vault', 'Pendulum Hall', 'Gearworks Gallery',
+            'Cipher Sanctum', 'Balance Parlor', 'Escapement Crypt', 'Meridian Room',
+            'Archive Cell', 'Grand Rotunda'
+        ];
+
+        // --- THREE.JS SCENE & LIGHTING ---
+        const canvas = document.getElementById('game-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.15;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0c0a0e);
+        scene.fog = new THREE.FogExp2(0x0c0a0e, 0.028);
+
+        const camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 90);
+        scene.add(camera);
+
+        // Player Held Lantern & UV Beam attached to Camera
+        const lanternLight = new THREE.PointLight(0xffb454, 1.35, 16, 1.6);
+        lanternLight.position.set(0.35, -0.25, -0.4);
+        camera.add(lanternLight);
+
+        const uvSpotLight = new THREE.SpotLight(0xa855f7, 0, 14, Math.PI / 5, 0.5, 1.2);
+        uvSpotLight.position.set(0, 0, 0);
+        uvSpotLight.target.position.set(0, 0, -5);
+        camera.add(uvSpotLight);
+        camera.add(uvSpotLight.target);
+
+        // Ambient Dust Motes
+        const dustCount = 260;
+        const dustGeo = new THREE.BufferGeometry();
+        const dustPositions = new Float32Array(dustCount * 3);
+        for (let i = 0; i < dustCount * 3; i += 3) {
+            dustPositions[i] = (Math.random() - 0.5) * 14;
+            dustPositions[i + 1] = Math.random() * 4.5;
+            dustPositions[i + 2] = (Math.random() - 0.5) * 40;
+        }
+        dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+        const dustMat = new THREE.PointsMaterial({ color: 0xfde68a, size: 0.045, transparent: true, opacity: 0.55 });
+        const dustPoints = new THREE.Points(dustGeo, dustMat);
+        scene.add(dustPoints);
+
+        // --- LEVEL SPEC GENERATOR FOR ANY LEVEL 1..100 ---
+        const CRYPTEX_GLYPHS = ['A', 'C', 'E', 'H', 'K', 'M', 'R', 'T', 'V', 'X', 'Z'];
+
+        function generateLevelSpec(levelNum) {
+            const rng = createSeededRandom(levelNum * 137 + 29);
+            const themeIndex = Math.floor((levelNum - 1) / 5) % ROOM_THEMES.length;
+            const theme = ROOM_THEMES[themeIndex];
+            const suffix = ROOM_SUFFIXES[(levelNum - 1) % ROOM_SUFFIXES.length];
+            const title = `The ${theme.prefix} ${suffix}`;
+
+            // Generate deterministic codes for this chamber
+            const hour = 1 + Math.floor(rng() * 12);
+            const minute = [0, 15, 30, 45][Math.floor(rng() * 4)];
+            const safeCode = [
+                Math.floor(rng() * 10),
+                Math.floor(rng() * 10),
+                Math.floor(rng() * 10),
+                Math.floor(rng() * 10)
+            ].join('');
+
+            const cryptexCode = [
+                CRYPTEX_GLYPHS[Math.floor(rng() * CRYPTEX_GLYPHS.length)],
+                CRYPTEX_GLYPHS[Math.floor(rng() * CRYPTEX_GLYPHS.length)],
+                CRYPTEX_GLYPHS[Math.floor(rng() * CRYPTEX_GLYPHS.length)]
+            ];
+
+            const switchPattern = [
+                rng() > 0.5,
+                rng() > 0.5,
+                rng() > 0.5
+            ];
+
+            // Scale complexity smoothly from Level 1 to Level 100
+            const hasClockAndDesk = levelNum >= 2;
+            const hasBreakerBox = levelNum >= 6 && (levelNum % 2 === 0 || levelNum >= 25);
+
+            const hints = [];
+            if (hasClockAndDesk) {
+                hints.push(`Inspect the Desk Note to find the target clock time (${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}), then set the Grandfather Clock to receive the Brass Key.`);
+                hints.push(`Use the Brass Key on the locked desk drawer to retrieve the UV Lens and the first two digits of the safe (${safeCode.slice(0, 2)}).`);
+            }
+            hints.push(`Slide the Oil Painting on the west wall to reveal the Recessed Brass Safe and activate your UV Lens [U] to spot the remaining safe digits (${safeCode.slice(2, 4)}).`);
+            hints.push(`Dial ${safeCode} into the Recessed Brass Safe to obtain the Heavy Iron Lever.`);
+            if (hasBreakerBox) {
+                hints.push(`Align the 3-Switch Brass Breaker Box to [${switchPattern.map(b => b ? 'UP' : 'DOWN').join(' - ')}] as shown on the east schematic.`);
+            }
+            hints.push(`Insert the Heavy Iron Lever into the Vault Pedestal beside the north door and set the Cryptex rings to [ ${cryptexCode.join(' - ')} ] to open the exit into Chamber ${String(Math.min(100, levelNum + 1)).padStart(3, '0')}.`);
+
+            return {
+                levelNum,
+                title,
+                theme,
+                hour,
+                minute,
+                safeCode,
+                cryptexCode,
+                switchPattern,
+                hasClockAndDesk,
+                hasBreakerBox,
+                hints
+            };
+        }
+
+        // --- SEAMLESS CHAMBER INSTANCE BUILDER ---
+        // Room dimensions: Width = 12 (-6..+6), Depth = 14 (-7..+7), Height = 4.6
+        // Connecting Corridor between Chamber N and Chamber N+1: Depth = 4.0 (Z from -7 to -11)
+        // So Chamber N+1 is centered at Z_center(N) - 18.0!
+        const ROOM_W = 12;
+        const ROOM_D = 14;
+        const ROOM_H = 4.6;
+        const CORRIDOR_D = 4.0;
+        const CHAMBER_STRIDE = ROOM_D + CORRIDOR_D; // 18.0 units per chamber
+
+        const loadedChambers = new Map(); // levelNum -> chamberInstance
+
+        function buildChamberInstance(levelNum) {
+            if (loadedChambers.has(levelNum)) return loadedChambers.get(levelNum);
+
+            const spec = generateLevelSpec(levelNum);
+            const zCenter = -(levelNum - 1) * CHAMBER_STRIDE;
+            const group = new THREE.Group();
+            group.position.set(0, 0, zCenter);
+
+            const interactables = [];
+            const colliders = []; // { minX, maxX, minZ, maxZ } in WORLD coordinates
+            const uvMeshes = [];
+
+            const floorTex = getProceduralTexture(spec.theme.floorKind, spec.theme.floorA, spec.theme.floorB);
+            const wallTex = getProceduralTexture(spec.theme.wallKind, spec.theme.wallA, spec.theme.wallB);
+
+            const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.72, metalness: 0.1 });
+            const wallMat = new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.78 });
+            const brassMat = new THREE.MeshStandardMaterial({ color: 0xd9a95b, roughness: 0.3, metalness: 0.82 });
+            const darkIronMat = new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.45, metalness: 0.75 });
+            const mahogMat = new THREE.MeshStandardMaterial({ color: 0x3b1c0e, roughness: 0.55 });
+
+            // 1. Floor & Ceiling
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_W, ROOM_D), floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.receiveShadow = true;
+            group.add(floor);
+
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(ROOM_W, ROOM_D),
+                new THREE.MeshStandardMaterial({ color: spec.theme.ceilingColor, roughness: 0.9 })
+            );
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.y = ROOM_H;
+            group.add(ceiling);
+
+            // Chandelier / Ceiling Light
+            const roomLight = new THREE.PointLight(spec.theme.lightColor, 1.35, 19, 1.4);
+            roomLight.position.set(0, ROOM_H - 0.7, 0);
+            roomLight.castShadow = true;
+            group.add(roomLight);
+
+            const fixture = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.2, 0.35, 12), brassMat);
+            fixture.position.set(0, ROOM_H - 0.25, 0);
+            group.add(fixture);
+
+            // 2. Perimeter Walls with Doorway Openings (South Entry Doorway & North Vault Exit Doorway)
+            // West & East solid walls
+            const westWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, ROOM_H, ROOM_D), wallMat);
+            westWall.position.set(-ROOM_W / 2 - 0.2, ROOM_H / 2, 0);
+            westWall.receiveShadow = true;
+            group.add(westWall);
+
+            const eastWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, ROOM_H, ROOM_D), wallMat);
+            eastWall.position.set(ROOM_W / 2 + 0.2, ROOM_H / 2, 0);
+            eastWall.receiveShadow = true;
+            group.add(eastWall);
+
+            // North Wall (split around 2.6m wide Exit Vault Doorway)
+            const sideWallW = (ROOM_W - 2.6) / 2;
+            const northLeft = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, ROOM_H, 0.4), wallMat);
+            northLeft.position.set(-ROOM_W / 2 + sideWallW / 2, ROOM_H / 2, -ROOM_D / 2);
+            group.add(northLeft);
+
+            const northRight = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, ROOM_H, 0.4), wallMat);
+            northRight.position.set(ROOM_W / 2 - sideWallW / 2, ROOM_H / 2, -ROOM_D / 2);
+            group.add(northRight);
+
+            const northLintel = new THREE.Mesh(new THREE.BoxGeometry(2.6, ROOM_H - 2.9, 0.4), wallMat);
+            northLintel.position.set(0, 2.9 + (ROOM_H - 2.9) / 2, -ROOM_D / 2);
+            group.add(northLintel);
+
+            // South Wall (split around 2.6m wide Entry Doorway)
+            const southLeft = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, ROOM_H, 0.4), wallMat);
+            southLeft.position.set(-ROOM_W / 2 + sideWallW / 2, ROOM_H / 2, ROOM_D / 2);
+            group.add(southLeft);
+
+            const southRight = new THREE.Mesh(new THREE.BoxGeometry(sideWallW, ROOM_H, 0.4), wallMat);
+            southRight.position.set(ROOM_W / 2 - sideWallW / 2, ROOM_H / 2, ROOM_D / 2);
+            group.add(southRight);
+
+            const southLintel = new THREE.Mesh(new THREE.BoxGeometry(2.6, ROOM_H - 2.9, 0.4), wallMat);
+            southLintel.position.set(0, 2.9 + (ROOM_H - 2.9) / 2, ROOM_D / 2);
+            group.add(southLintel);
+
+            // Rear Entry Airlock Door (closes behind player once inside)
+            const rearDoorPivot = new THREE.Group();
+            rearDoorPivot.position.set(-1.3, 0, ROOM_D / 2);
+            const rearDoorMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.9, 0.22), darkIronMat);
+            rearDoorMesh.position.set(1.3, 1.45, 0);
+            rearDoorPivot.add(rearDoorMesh);
+            group.add(rearDoorPivot);
+
+            // 3. Connecting Threshold Corridor to Chamber N+1 (Z from -7 to -11)
+            if (levelNum < 100) {
+                const corrFloor = new THREE.Mesh(new THREE.PlaneGeometry(2.8, CORRIDOR_D), floorMat);
+                corrFloor.rotation.x = -Math.PI / 2;
+                corrFloor.position.set(0, 0.01, -ROOM_D / 2 - CORRIDOR_D / 2);
+                group.add(corrFloor);
+
+                const corrCeil = new THREE.Mesh(new THREE.PlaneGeometry(2.8, CORRIDOR_D), darkIronMat);
+                corrCeil.rotation.x = Math.PI / 2;
+                corrCeil.position.set(0, 2.95, -ROOM_D / 2 - CORRIDOR_D / 2);
+                group.add(corrCeil);
+
+                const corrLeft = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.0, CORRIDOR_D), darkIronMat);
+                corrLeft.position.set(-1.45, 1.5, -ROOM_D / 2 - CORRIDOR_D / 2);
+                group.add(corrLeft);
+
+                const corrRight = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.0, CORRIDOR_D), darkIronMat);
+                corrRight.position.set(1.45, 1.5, -ROOM_D / 2 - CORRIDOR_D / 2);
+                group.add(corrRight);
+
+                const corrLight = new THREE.PointLight(0xfbbf24, 0.9, 7);
+                corrLight.position.set(0, 2.6, -ROOM_D / 2 - CORRIDOR_D / 2);
+                group.add(corrLight);
+            }
+
+            // 4. Heavy North Exit Vault Door (Hinged at X = -1.3, Z = -ROOM_D / 2)
+            const vaultFrame = new THREE.Mesh(new THREE.BoxGeometry(2.85, 3.05, 0.5), brassMat);
+            vaultFrame.position.set(0, 1.52, -ROOM_D / 2);
+            // Hollow doorway frame beams
+            const frameTop = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.25, 0.55), brassMat);
+            frameTop.position.set(0, 2.95, -ROOM_D / 2);
+            group.add(frameTop);
+
+            const exitDoorPivot = new THREE.Group();
+            exitDoorPivot.position.set(-1.3, 0, -ROOM_D / 2);
+            const exitDoorSlab = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.9, 0.28), darkIronMat);
+            exitDoorSlab.position.set(1.3, 1.45, 0);
+            exitDoorSlab.castShadow = true;
+            exitDoorPivot.add(exitDoorSlab);
+
+            // Ornate Gear Wheel on Exit Door
+            const doorGear = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.08, 10, 24), brassMat);
+            doorGear.position.set(1.3, 1.5, 0.18);
+            exitDoorPivot.add(doorGear);
+
+            // Chamber Number Plaque above Exit Door
+            const plaqueTex = createSignTexture(
+                levelNum < 100 ? `EXIT TO CHAMBER ${String(levelNum + 1).padStart(3, '0')}` : 'FINAL SANCTUM EXIT',
+                [spec.title.toUpperCase()],
+                false
+            );
+            const plaqueMesh = new THREE.Mesh(
+                new THREE.PlaneGeometry(2.2, 0.7),
+                new THREE.MeshBasicMaterial({ map: plaqueTex })
+            );
+            plaqueMesh.position.set(0, 3.45, -ROOM_D / 2 + 0.22);
+            group.add(plaqueMesh);
+            group.add(exitDoorPivot);
+
+            // Chamber Internal State
+            const chamberState = {
+                levelNum,
+                spec,
+                zCenter,
+                group,
+                interactables,
+                colliders,
+                uvMeshes,
+                rearDoorPivot,
+                exitDoorPivot,
+                doorGear,
+                rearDoorClosed: levelNum === 1,
+                exitUnlocked: false,
+                exitOpenAngle: 0,
+                paintingSlid: false,
+                clockSolved: !spec.hasClockAndDesk,
+                deskUnlocked: !spec.hasClockAndDesk,
+                safeSolved: false,
+                breakerSolved: !spec.hasBreakerBox,
+                breakerStates: [false, false, false],
+                leverInserted: false,
+                cryptexValues: [0, 0, 0],
+                hasBrassKey: !spec.hasClockAndDesk,
+                hasIronLever: false
+            };
+
+            if (levelNum === 1) {
+                rearDoorPivot.rotation.y = 0; // Closed behind player at start
+            } else {
+                rearDoorPivot.rotation.y = -Math.PI * 0.55; // Open so player can walk in from previous corridor
+            }
+
+            // 5. VAULT PEDESTAL & 3-RING CRYPTEX (Beside Exit Door at X = 2.1, Z = -6.1)
+            const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.52, 1.15, 16), darkIronMat);
+            pedestal.position.set(2.1, 0.575, -ROOM_D / 2 + 0.85);
+            pedestal.castShadow = true;
+            group.add(pedestal);
+
+            const cryptexCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.32, 16), brassMat);
+            cryptexCrown.position.set(2.1, 1.32, -ROOM_D / 2 + 0.85);
+            group.add(cryptexCrown);
+
+            const leverArm = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.75, 8), brassMat);
+            leverArm.position.set(2.1, 1.45, -ROOM_D / 2 + 0.85);
+            leverArm.rotation.z = -0.45;
+            leverArm.visible = false;
+            group.add(leverArm);
+            chamberState.leverArm = leverArm;
+
+            cryptexCrown.userData = {
+                prompt: 'Inspect Vault Cryptex & Lever Pedestal',
+                onInteract: () => openCryptexModal(chamberState)
+            };
+            pedestal.userData = cryptexCrown.userData;
+            interactables.push(cryptexCrown, pedestal);
+
+            // 6. WEST WALL: SLIDING OIL PAINTING + RECESSED BRASS SAFE
+            // Recessed Safe mounted on West Wall at X = -5.85, Y = 1.65, Z = -1.2
+            const safeBody = new THREE.Mesh(new THREE.BoxGeometry(0.32, 1.1, 1.1), darkIronMat);
+            safeBody.position.set(-ROOM_W / 2 + 0.14, 1.65, -1.2);
+            group.add(safeBody);
+
+            const safeDial = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.08, 18), brassMat);
+            safeDial.rotation.z = Math.PI / 2;
+            safeDial.position.set(-ROOM_W / 2 + 0.32, 1.65, -1.2);
+            group.add(safeDial);
+
+            safeBody.userData = {
+                prompt: 'Dial 4-Digit Brass Wall Safe',
+                onInteract: () => {
+                    if (!chamberState.paintingSlid) {
+                        showToast('Slide the oil painting aside first to access the safe.');
+                        return;
+                    }
+                    openSafeModal(chamberState);
+                }
+            };
+            safeDial.userData = safeBody.userData;
+            interactables.push(safeBody, safeDial);
+
+            // Sliding Framed Painting covering the Safe
+            const paintingGroup = new THREE.Group();
+            paintingGroup.position.set(-ROOM_W / 2 + 0.38, 1.72, -1.2);
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.55, 1.75), brassMat);
+            paintingGroup.add(frame);
+
+            const artTex = createSignTexture(
+                `PLATE #${String(levelNum).padStart(3, '0')}`,
+                [`"${spec.title}"`, 'HOROLOGICAL ARCHIVE'],
+                false
+            );
+            const canvasArt = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.5, 1.3),
+                new THREE.MeshStandardMaterial({ map: artTex, roughness: 0.6 })
+            );
+            canvasArt.rotation.y = Math.PI / 2;
+            canvasArt.position.x = 0.07;
+            paintingGroup.add(canvasArt);
+            group.add(paintingGroup);
+
+            canvasArt.userData = {
+                prompt: 'Slide Framed Painting on Brass Rails',
+                onInteract: () => {
+                    if (!chamberState.paintingSlid) {
+                        chamberState.paintingSlid = true;
+                        paintingGroup.position.z -= 1.55;
+                        audio.playClick();
+                        addJournalNote(levelNum, 'Hidden Wall Safe Revealed', `Sliding the painting uncovered a 4-digit Brass Wall Safe recessed into the west masonry.`);
+                        showToast('Painting slid open! A recessed Brass Safe is revealed.');
+                    } else {
+                        openSafeModal(chamberState);
+                    }
+                }
+            };
+            interactables.push(canvasArt);
+
+            // 7. UV HIDDEN CIPHER PLAQUES (Visible when UV Lens [U] is active)
+            const uvSafeHintTex = createSignTexture(
+                'UV CIPHER // SAFE',
+                [`DIGITS 3 & 4:  _ _ ${spec.safeCode.slice(2, 4)}`],
+                true
+            );
+            const uvSafePlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.4, 0.85),
+                new THREE.MeshBasicMaterial({ map: uvSafeHintTex, transparent: true, opacity: 0.04 })
+            );
+            uvSafePlane.rotation.y = Math.PI / 2;
+            uvSafePlane.position.set(-ROOM_W / 2 + 0.04, 1.72, -1.2);
+            group.add(uvSafePlane);
+            uvMeshes.push(uvSafePlane);
+
+            const uvCryptexTex = createSignTexture(
+                'UV MONOGRAM // EXIT',
+                [`CRYPTEX: [ ${spec.cryptexCode.join(' - ')} ]`],
+                true
+            );
+            const uvCryptexPlane = new THREE.Mesh(
+                new THREE.PlaneGeometry(1.6, 0.9),
+                new THREE.MeshBasicMaterial({ map: uvCryptexTex, transparent: true, opacity: 0.04 })
+            );
+            uvCryptexPlane.rotation.x = -Math.PI / 2;
+            uvCryptexPlane.position.set(0, 0.03, -2.5);
+            group.add(uvCryptexPlane);
+            uvMeshes.push(uvCryptexPlane);
+
+            // 8. CENTER-EAST MAHOGANY DESK & GRANDFATHER CLOCK (Levels 2..100, or simplified note on Level 1)
+            const deskGroup = new THREE.Group();
+            deskGroup.position.set(2.4, 0, 1.2);
+            const deskTop = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 2.8), mahogMat);
+            deskTop.position.y = 0.88;
+            deskTop.castShadow = true;
+            deskGroup.add(deskTop);
+
+            const deskDrawer = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.78, 2.5), mahogMat);
+            deskDrawer.position.y = 0.44;
+            deskDrawer.castShadow = true;
+            deskGroup.add(deskDrawer);
+
+            // Parchment Note lying on Desk
+            const noteTex = createSignTexture(
+                `CHAMBER ${String(levelNum).padStart(3, '0')} LEDGER`,
+                spec.hasClockAndDesk
+                    ? [`CLOCK TARGET: ${String(spec.hour).padStart(2, '0')}:${String(spec.minute).padStart(2, '0')}`, `SAFE PREFIX: ${spec.safeCode.slice(0, 2)} _ _`]
+                    : [`SAFE CODE: ${spec.safeCode}`, `CRYPTEX: ${spec.cryptexCode.join(' - ')}`],
+                false
+            );
+            const deskNote = new THREE.Mesh(
+                new THREE.PlaneGeometry(0.68, 0.48),
+                new THREE.MeshStandardMaterial({ map: noteTex, roughness: 0.8 })
+            );
+            deskNote.rotation.x = -Math.PI / 2;
+            deskNote.rotation.z = -0.35;
+            deskNote.position.set(-0.15, 0.96, -0.35);
+            deskGroup.add(deskNote);
+
+            // Banker's Lamp on Desk
+            const lampBase = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.45, 12), brassMat);
+            lampBase.position.set(0.25, 1.15, 0.75);
+            deskGroup.add(lampBase);
+            const lampShade = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.18, 0.26, 0.18, 12),
+                new THREE.MeshStandardMaterial({ color: spec.theme.accentColor, emissive: spec.theme.accentColor, emissiveIntensity: 0.45 })
+            );
+            lampShade.position.set(0.25, 1.38, 0.75);
+            deskGroup.add(lampShade);
+
+            group.add(deskGroup);
+
+            // Desk Collider in world coords
+            colliders.push({
+                minX: 2.4 - 0.95,
+                maxX: 2.4 + 0.95,
+                minZ: zCenter + 1.2 - 1.55,
+                maxZ: zCenter + 1.2 + 1.55
+            });
+
+            deskNote.userData = {
+                prompt: 'Read Horologist\'s Desk Ledger',
+                onInteract: () => {
+                    audio.playClick();
+                    const detail = spec.hasClockAndDesk
+                        ? `Ledger Entry: "Set the Grandfather Clock to ${String(spec.hour).padStart(2, '0')}:${String(spec.minute).padStart(2, '0')} to release the drawer key. Safe begins with ${spec.safeCode.slice(0, 2)}__."`
+                        : `Introductory Ledger: "Welcome to the Labyrinth. Safe combination is ${spec.safeCode}. Cryptex monogram is ${spec.cryptexCode.join(' - ')}."`;
+                    addJournalNote(levelNum, `Chamber ${String(levelNum).padStart(3, '0')} Desk Ledger`, detail);
+                    openNoteModal(`Chamber ${String(levelNum).padStart(3, '0')} Desk Ledger`, detail);
+                }
+            };
+            deskDrawer.userData = {
+                prompt: spec.hasClockAndDesk ? 'Inspect Locked Mahogany Desk Drawer' : 'Inspect Mahogany Desk',
+                onInteract: () => {
+                    if (!spec.hasClockAndDesk || chamberState.deskUnlocked) {
+                        deskNote.userData.onInteract();
+                        return;
+                    }
+                    if (!chamberState.hasBrassKey) {
+                        audio.playError();
+                        showToast('The mahogany drawer is locked. Find the Small Brass Key first.');
+                        return;
+                    }
+                    chamberState.deskUnlocked = true;
+                    state.hasUVLens = true;
+                    updateEquipmentHUD();
+                    audio.playKeyPickup();
+                    const msg = `Unlocked desk drawer! Found the UV Inspector Lens [U] and a torn slip reading: "Safe First Two Digits: ${spec.safeCode.slice(0, 2)}__".`;
+                    addJournalNote(levelNum, 'Unlocked Desk Drawer & UV Lens', msg);
+                    openNoteModal('Desk Drawer Unlocked!', msg);
+                }
+            };
+            interactables.push(deskNote, deskDrawer);
+
+            // 9. GRANDFATHER CLOCK (East Wall at X = 5.45, Z = -2.4)
+            if (spec.hasClockAndDesk) {
+                const clockGroup = new THREE.Group();
+                clockGroup.position.set(ROOM_W / 2 - 0.55, 0, -2.4);
+                const clockBody = new THREE.Mesh(new THREE.BoxGeometry(0.75, 2.75, 0.95), mahogMat);
+                clockBody.position.y = 1.375;
+                clockBody.castShadow = true;
+                clockGroup.add(clockBody);
+
+                const clockFace = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.34, 0.34, 0.08, 24),
+                    new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.4 })
+                );
+                clockFace.rotation.z = Math.PI / 2;
+                clockFace.position.set(-0.38, 2.15, 0);
+                clockGroup.add(clockFace);
+                group.add(clockGroup);
+
+                colliders.push({
+                    minX: ROOM_W / 2 - 1.1,
+                    maxX: ROOM_W / 2,
+                    minZ: zCenter - 2.4 - 0.65,
+                    maxZ: zCenter - 2.4 + 0.65
+                });
+
+                clockBody.userData = {
+                    prompt: 'Set Grandfather Clock Hands',
+                    onInteract: () => openClockModal(chamberState)
+                };
+                clockFace.userData = clockBody.userData;
+                interactables.push(clockBody, clockFace);
+            } else {
+                // On Level 1, grant UV lens right away so player learns UV inspection immediately
+                state.hasUVLens = true;
+                updateEquipmentHUD();
+            }
+
+            // 10. 3-SWITCH BRASS BREAKER BOX (East Wall at X = 5.75, Z = 3.6 on applicable levels)
+            if (spec.hasBreakerBox) {
+                const breakerBox = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.0, 1.1), darkIronMat);
+                breakerBox.position.set(ROOM_W / 2 - 0.16, 1.55, 3.6);
+                group.add(breakerBox);
+
+                const diagTex = createSignTexture(
+                    'POWER RELAY SCHEMATIC',
+                    [`SET SWITCHES:`, `[ ${spec.switchPattern.map(b => b ? 'UP' : 'DOWN').join(' | ')} ]`],
+                    false
+                );
+                const diagMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(1.1, 0.72),
+                    new THREE.MeshBasicMaterial({ map: diagTex })
+                );
+                diagMesh.rotation.y = -Math.PI / 2;
+                diagMesh.position.set(ROOM_W / 2 - 0.04, 2.55, 3.6);
+                group.add(diagMesh);
+
+                breakerBox.userData = {
+                    prompt: 'Operate 3-Switch Brass Fuse Breaker',
+                    onInteract: () => openBreakerModal(chamberState)
+                };
+                interactables.push(breakerBox);
+            }
+
+            scene.add(group);
+
+            const instance = chamberState;
+            loadedChambers.set(levelNum, instance);
+            return instance;
+        }
+
+        function disposeChamber(levelNum) {
+            const inst = loadedChambers.get(levelNum);
+            if (!inst) return;
+            scene.remove(inst.group);
+            loadedChambers.delete(levelNum);
+        }
+
+        // --- PUZZLE MODALS & INTERACTION HANDLERS ---
+        function openPuzzleModal(title, htmlContent) {
+            state.modalOpen = true;
+            if (document.pointerLockElement) document.exitPointerLock();
+            document.getElementById('puzzle-modal-title').textContent = title;
+            document.getElementById('puzzle-modal-body').innerHTML = htmlContent;
+            document.getElementById('puzzle-modal').classList.remove('hidden');
+        }
+
+        function closePuzzleModal() {
+            state.modalOpen = false;
+            document.getElementById('puzzle-modal').classList.add('hidden');
+            if (state.playing && canvas.requestPointerLock) {
+                try { canvas.requestPointerLock(); } catch (e) { /* Fallback drag look works seamlessly */ }
+            }
+        }
+
+        function openNoteModal(title, bodyText) {
+            openPuzzleModal(title, `
+                <div class="bg-[#e7dcc6] text-stone-900 p-5 rounded-xl border-2 border-amber-800/50 font-serif-display leading-relaxed shadow-inner">
+                    <p class="text-sm sm:text-base font-semibold">${bodyText}</p>
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="closePuzzleModal()" class="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs uppercase cursor-pointer">Continue Investigation</button>
+                </div>
+            `);
+        }
+
+        // 1. Grandfather Clock Modal
+        let tempHour = 12;
+        let tempMin = 0;
+        function openClockModal(chamber) {
+            if (chamber.clockSolved) {
+                showToast('The Grandfather Clock has already released its Brass Key.');
+                return;
+            }
+            tempHour = 12;
+            tempMin = 0;
+            renderClockUI(chamber);
+        }
+
+        function renderClockUI(chamber) {
+            openPuzzleModal('Grandfather Clock Mechanism', `
+                <div class="text-center space-y-4">
+                    <p class="text-xs text-stone-400">Align the brass hour and minute hands to the time recorded in this chamber's ledger.</p>
+                    <div class="inline-flex items-center gap-3 px-6 py-4 rounded-2xl bg-stone-950 border border-amber-500/40 font-mono-tech text-3xl font-bold text-amber-300">
+                        <span id="clock-h-disp">${String(tempHour).padStart(2, '0')}</span>
+                        <span class="animate-pulse">:</span>
+                        <span id="clock-m-disp">${String(tempMin).padStart(2, '0')}</span>
+                    </div>
+                    <div class="flex items-center justify-center gap-4">
+                        <button onclick="adjustClock(1, 0)" class="px-4 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 border border-amber-400/30 text-xs font-bold text-amber-200 cursor-pointer">+1 Hour</button>
+                        <button onclick="adjustClock(0, 15)" class="px-4 py-2 rounded-lg bg-stone-800 hover:bg-stone-700 border border-amber-400/30 text-xs font-bold text-amber-200 cursor-pointer">+15 Mins</button>
+                    </div>
+                    <div class="pt-2">
+                        <button onclick="verifyClockSolution()" class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs uppercase tracking-wider cursor-pointer">Engage Chime Pendulum</button>
+                    </div>
+                </div>
+            `);
+        }
+
+        window.adjustClock = function (dh, dm) {
+            audio.playClick();
+            tempHour = ((tempHour - 1 + dh) % 12) + 1;
+            tempMin = (tempMin + dm) % 60;
+            document.getElementById('clock-h-disp').textContent = String(tempHour).padStart(2, '0');
+            document.getElementById('clock-m-disp').textContent = String(tempMin).padStart(2, '0');
+        };
+
+        window.verifyClockSolution = function () {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+            if (tempHour === chamber.spec.hour && tempMin === chamber.spec.minute) {
+                chamber.clockSolved = true;
+                chamber.hasBrassKey = true;
+                audio.playClockChime();
+                updateInventoryHUD(chamber);
+                addJournalNote(chamber.levelNum, 'Small Brass Key Acquired', 'Setting the Grandfather Clock chimed the pendulum and dropped a Small Brass Key.');
+                closePuzzleModal();
+                showToast('Clock chimed! Obtained Small Brass Key.');
+            } else {
+                audio.playError();
+                showToast('The pendulum clicks—incorrect time setting.');
+            }
+        };
+
+        // 2. 4-Digit Brass Combination Safe Modal
+        let tempSafeDigits = [0, 0, 0, 0];
+        function openSafeModal(chamber) {
+            if (chamber.safeSolved) {
+                showToast('The Brass Wall Safe is already open.');
+                return;
+            }
+            tempSafeDigits = [0, 0, 0, 0];
+            openPuzzleModal('Recessed 4-Digit Brass Safe', `
+                <div class="text-center space-y-4">
+                    <p class="text-xs text-stone-400">Combine the desk ledger prefix and the ultraviolet wall cipher [U] to unlock the safe.</p>
+                    <div class="flex items-center justify-center gap-3">
+                        ${[0, 1, 2, 3].map(idx => `
+                            <div class="flex flex-col items-center gap-1.5">
+                                <button onclick="stepSafeDigit(${idx}, 1)" class="w-12 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold cursor-pointer">▲</button>
+                                <div id="safe-d-${idx}" class="w-12 h-14 rounded-xl bg-stone-950 border border-amber-500/40 flex items-center justify-center font-mono-tech text-2xl font-bold text-amber-200">0</div>
+                                <button onclick="stepSafeDigit(${idx}, -1)" class="w-12 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold cursor-pointer">▼</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="verifySafeSolution()" class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs uppercase tracking-wider cursor-pointer">Turn Brass Safe Handle</button>
+                </div>
+            `);
+        }
+
+        window.stepSafeDigit = function (idx, delta) {
+            audio.playClick();
+            tempSafeDigits[idx] = (tempSafeDigits[idx] + delta + 10) % 10;
+            document.getElementById(`safe-d-${idx}`).textContent = tempSafeDigits[idx];
+        };
+
+        window.verifySafeSolution = function () {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+            if (tempSafeDigits.join('') === chamber.spec.safeCode) {
+                chamber.safeSolved = true;
+                chamber.hasIronLever = true;
+                audio.playKeyPickup();
+                updateInventoryHUD(chamber);
+                addJournalNote(chamber.levelNum, 'Heavy Iron Lever Acquired', 'The Brass Wall Safe swung open, yielding a Heavy Iron Lever for the Vault Pedestal.');
+                closePuzzleModal();
+                showToast('Safe unlocked! Retrieved Heavy Iron Lever.');
+            } else {
+                audio.playError();
+                showToast('Safe deadbolt remains locked. Check your 4-digit clues.');
+            }
+        };
+
+        // 3. 3-Switch Brass Fuse Breaker Modal
+        function openBreakerModal(chamber) {
+            if (chamber.breakerSolved) {
+                showToast('Power relay is already energized.');
+                return;
+            }
+            openPuzzleModal('3-Switch Brass Power Relay', `
+                <div class="text-center space-y-4">
+                    <p class="text-xs text-stone-400">Set the three knife-switches to match the relay schematic mounted above the box.</p>
+                    <div class="flex items-center justify-center gap-4">
+                        ${[0, 1, 2].map(i => `
+                            <button id="brk-btn-${i}" onclick="toggleBreakerSwitch(${i})" class="w-20 py-4 rounded-xl border ${chamber.breakerStates[i] ? 'bg-emerald-950/80 border-emerald-400 text-emerald-300' : 'bg-stone-900 border-stone-700 text-stone-300'} font-mono-tech text-sm font-bold cursor-pointer transition-all">
+                                SW ${i + 1}<br><span class="text-lg">${chamber.breakerStates[i] ? 'UP' : 'DOWN'}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                    <button onclick="verifyBreakerSolution()" class="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs uppercase tracking-wider cursor-pointer">Engage Main Busbar</button>
+                </div>
+            `);
+        }
+
+        window.toggleBreakerSwitch = function (idx) {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+            audio.playClick();
+            chamber.breakerStates[idx] = !chamber.breakerStates[idx];
+            openBreakerModal(chamber);
+        };
+
+        window.verifyBreakerSolution = function () {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+            const ok = chamber.breakerStates.every((val, i) => val === chamber.spec.switchPattern[i]);
+            if (ok) {
+                chamber.breakerSolved = true;
+                audio.playKeyPickup();
+                closePuzzleModal();
+                showToast('Main vault relay energized!');
+            } else {
+                audio.playError();
+                showToast('Relay tripped—switch pattern does not match schematic.');
+            }
+        };
+
+        // 4. Vault Pedestal & 3-Ring Cryptex Modal
+        function openCryptexModal(chamber) {
+            if (chamber.exitUnlocked) {
+                showToast('The Exit Vault Door is already open! Walk straight through.');
+                return;
+            }
+            openPuzzleModal('Vault Pedestal & 3-Ring Cryptex', `
+                <div class="text-center space-y-4">
+                    <div class="flex items-center justify-center gap-2 text-xs">
+                        <span class="px-2.5 py-1 rounded ${chamber.leverInserted ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-stone-900 text-amber-300 border border-amber-500/30'}">
+                            Lever: ${chamber.leverInserted ? 'SEATED' : (chamber.hasIronLever ? 'READY IN SATCHEL' : 'MISSING (CHECK SAFE)')}
+                        </span>
+                        ${chamber.spec.hasBreakerBox ? `
+                        <span class="px-2.5 py-1 rounded ${chamber.breakerSolved ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-red-950/70 text-red-300 border border-red-500/40'}">
+                            Power: ${chamber.breakerSolved ? 'ONLINE' : 'OFFLINE'}
+                        </span>` : ''}
+                    </div>
+                    ${(!chamber.leverInserted && chamber.hasIronLever) ? `
+                        <button onclick="insertLeverIntoPedestal()" class="w-full py-2 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-400 text-amber-200 text-xs font-bold uppercase cursor-pointer">
+                            Insert Heavy Iron Lever into Gear Socket
+                        </button>
+                    ` : ''}
+                    <p class="text-xs text-stone-400">Align the 3 brass cryptex rings to the ultraviolet floor monogram [U], then pull the lever.</p>
+                    <div class="flex items-center justify-center gap-3">
+                        ${[0, 1, 2].map(idx => `
+                            <div class="flex flex-col items-center gap-1.5">
+                                <button onclick="rotateCryptexRing(${idx}, 1)" class="w-14 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold cursor-pointer">▲</button>
+                                <div id="cryp-r-${idx}" class="w-14 h-14 rounded-xl bg-stone-950 border border-amber-500/40 flex items-center justify-center font-serif-display text-2xl font-bold text-amber-200">
+                                    ${CRYPTEX_GLYPHS[chamber.cryptexValues[idx]]}
+                                </div>
+                                <button onclick="rotateCryptexRing(${idx}, -1)" class="w-14 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 font-bold cursor-pointer">▼</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="pullVaultLever()" class="w-full py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-stone-950 font-extrabold text-xs uppercase tracking-wider cursor-pointer">
+                        Pull Vault Release Lever
+                    </button>
+                </div>
+            `);
+        }
+
+        window.insertLeverIntoPedestal = function () {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber || !chamber.hasIronLever) return;
+            chamber.leverInserted = true;
+            chamber.leverArm.visible = true;
+            audio.playClick();
+            openCryptexModal(chamber);
+        };
+
+        window.rotateCryptexRing = function (idx, delta) {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+            audio.playClick();
+            const len = CRYPTEX_GLYPHS.length;
+            chamber.cryptexValues[idx] = (chamber.cryptexValues[idx] + delta + len) % len;
+            document.getElementById(`cryp-r-${idx}`).textContent = CRYPTEX_GLYPHS[chamber.cryptexValues[idx]];
+        };
+
+        window.pullVaultLever = function () {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+
+            if (!chamber.leverInserted) {
+                audio.playError();
+                showToast('Insert the Heavy Iron Lever into the pedestal socket first!');
+                return;
+            }
+            if (!chamber.breakerSolved) {
+                audio.playError();
+                showToast('Vault locking bolts lack power—energize the 3-Switch Breaker Box!');
+                return;
+            }
+
+            const entered = chamber.cryptexValues.map(i => CRYPTEX_GLYPHS[i]);
+            const match = entered.every((ch, i) => ch === chamber.spec.cryptexCode[i]);
+            if (!match) {
+                audio.playError();
+                showToast('The Cryptex rings jam—check the UV floor monogram [U].');
+                return;
+            }
+
+            // SUCCESS! Unseal Exit Vault Door & Pre-build Next Chamber seamlessly!
+            chamber.exitUnlocked = true;
+            chamber.leverArm.rotation.z = 0.45;
+            audio.playVaultUnlock();
+            closePuzzleModal();
+
+            if (!saveData.completedLevels.includes(chamber.levelNum)) {
+                saveData.completedLevels.push(chamber.levelNum);
+            }
+            if (chamber.levelNum < 100) {
+                const nextNum = chamber.levelNum + 1;
+                buildChamberInstance(nextNum);
+                saveData.highestLevel = Math.max(saveData.highestLevel, nextNum);
+                persistSave();
+                document.getElementById('hud-objective-text').textContent = `Vault Unsealed! Walk straight through the north corridor into Chamber ${String(nextNum).padStart(3, '0')}`;
+                showToast(`Chamber ${String(chamber.levelNum).padStart(3, '0')} Unsealed! Walk straight into Chamber ${String(nextNum).padStart(3, '0')}.`);
+            } else {
+                persistSave();
+                document.getElementById('hud-objective-text').textContent = 'GRANDMASTER VICTORY! All 100 Labyrinth Chambers Unsealed!';
+                showToast('CONGRATULATIONS! You escaped all 100 Chambers of The Clockmaker\'s Labyrinth!');
+            }
+        };
+
+        // --- INVENTORY, JOURNAL, HINTS & LEVEL TRANSITION ---
+        function updateInventoryHUD(chamber) {
+            const box = document.getElementById('inventory-slots');
+            const items = [];
+            if (chamber && chamber.hasBrassKey && !chamber.deskUnlocked) {
+                items.push(`<span class="px-2.5 py-1 rounded bg-amber-500/20 border border-amber-400/40 text-amber-200 font-medium">Small Brass Key</span>`);
+            }
+            if (chamber && chamber.hasIronLever && !chamber.leverInserted) {
+                items.push(`<span class="px-2.5 py-1 rounded bg-stone-700/70 border border-stone-400/40 text-stone-100 font-medium">Heavy Iron Lever</span>`);
+            }
+            box.innerHTML = items.length ? items.join('') : `<span class="text-stone-500 italic text-xs">No active keys</span>`;
+        }
+
+        function updateEquipmentHUD() {
+            const btnUV = document.getElementById('btn-uv');
+            if (state.hasUVLens) {
+                btnUV.className = state.uvActive
+                    ? 'px-3 py-1.5 rounded-lg bg-violet-600/40 border border-violet-400 text-xs font-bold text-violet-200 transition-all cursor-pointer'
+                    : 'px-3 py-1.5 rounded-lg bg-stone-900/80 border border-violet-500/40 text-xs font-medium text-violet-300 transition-all cursor-pointer';
+            }
+        }
+
+        const journalLog = [];
+        function addJournalNote(levelNum, title, text) {
+            const key = `${levelNum}_${title}`;
+            if (journalLog.some(e => e.key === key)) return;
+            journalLog.unshift({ key, levelNum, title, text });
+            renderJournal();
+        }
+
+        function renderJournal() {
+            const el = document.getElementById('journal-entries');
+            if (!journalLog.length) {
+                el.innerHTML = `<p class="text-stone-400 italic text-center py-6">Inspect ledgers, paintings, and UV glyphs to record clues here.</p>`;
+                return;
+            }
+            el.innerHTML = journalLog.map(item => `
+                <div class="p-3.5 rounded-xl bg-stone-900/90 border border-amber-500/25">
+                    <div class="font-mono-tech text-[10px] text-amber-400 uppercase">CHAMBER ${String(item.levelNum).padStart(3, '0')} // ${item.title}</div>
+                    <p class="text-xs text-stone-200 mt-1 leading-relaxed">${item.text}</p>
+                </div>
+            `).join('');
+        }
+
+        function toggleJournal() {
+            const modal = document.getElementById('journal-modal');
+            const isHidden = modal.classList.contains('hidden');
+            if (isHidden) {
+                renderJournal();
+                state.modalOpen = true;
+                if (document.pointerLockElement) document.exitPointerLock();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+                state.modalOpen = false;
+                if (state.playing && canvas.requestPointerLock) {
+                    try { canvas.requestPointerLock(); } catch (e) {}
+                }
+            }
+        }
+
+        function requestProgressiveHint() {
+            const chamber = loadedChambers.get(state.activeLevelNum);
+            if (!chamber) return;
+            const hints = chamber.spec.hints;
+            const hintText = hints[Math.min(state.hintIndex, hints.length - 1)];
+            state.hintIndex = (state.hintIndex + 1) % hints.length;
+            addJournalNote(chamber.levelNum, `Field Hint #${state.hintIndex || hints.length}`, hintText);
+            showToast(`HINT: ${hintText}`, 5200);
+        }
+
+        function showToast(msg, duration = 3400) {
+            const box = document.getElementById('toast-box');
+            const el = document.createElement('div');
+            el.className = 'glass-brass px-4 py-2 rounded-xl border border-amber-400/50 text-xs sm:text-sm font-medium text-amber-100 shadow-2xl text-center max-w-md';
+            el.textContent = msg;
+            box.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transition = 'opacity 0.3s';
+                setTimeout(() => el.remove(), 320);
+            }, duration);
+        }
+
+        function announceChamberEntry(spec) {
+            const banner = document.getElementById('chamber-banner');
+            document.getElementById('banner-sub').textContent = `CHAMBER ${String(spec.levelNum).padStart(3, '0')} OF 100 ENTERED`;
+            document.getElementById('banner-title').textContent = spec.title;
+            banner.classList.remove('hidden', 'animate-chamber-banner');
+            void banner.offsetWidth;
+            banner.classList.add('animate-chamber-banner');
+
+            document.getElementById('hud-level-badge').textContent = String(spec.levelNum).padStart(3, '0');
+            document.getElementById('hud-level-counter').textContent = `CHAMBER ${String(spec.levelNum).padStart(3, '0')} / 100`;
+            document.getElementById('hud-room-name').textContent = spec.title;
+            document.getElementById('hud-objective-text').textContent = spec.levelNum < 100
+                ? `Unseal the Vault Exit Door to advance into Chamber ${String(spec.levelNum + 1).padStart(3, '0')}`
+                : 'Unseal the Final Sanctum Vault Door!';
+
+            scene.fog.color.setHex(spec.theme.fogColor);
+            scene.background.setHex(spec.theme.fogColor);
+        }
+
+        // --- JUMP TO ANY CHAMBER (1..100) OR START ---
+        function loadChamberDirect(levelNum) {
+            // Clear existing loaded chambers
+            Array.from(loadedChambers.keys()).forEach(k => disposeChamber(k));
+
+            state.activeLevelNum = levelNum;
+            state.hintIndex = 0;
+            saveData.currentLevel = levelNum;
+            persistSave();
+
+            const chamber = buildChamberInstance(levelNum);
+            if (levelNum < 100) buildChamberInstance(levelNum + 1);
+
+            player.pos.set(0, player.height, chamber.zCenter + 4.8);
+            state.yaw = 0;
+            state.pitch = 0;
+
+            updateInventoryHUD(chamber);
+            announceChamberEntry(chamber.spec);
+        }
+
+        function resumeOrStartCurrent() {
+            audio.init();
+            document.getElementById('menu-overlay').classList.add('hidden');
+            document.getElementById('hud-top').classList.remove('hidden');
+            document.getElementById('hud-bottom').classList.remove('hidden');
+            document.getElementById('hud-crosshair').classList.remove('hidden');
+
+            if (!loadedChambers.has(state.activeLevelNum)) {
+                loadChamberDirect(state.activeLevelNum);
+            }
+            state.playing = true;
+            state.modalOpen = false;
+            if (canvas.requestPointerLock) {
+                try { canvas.requestPointerLock(); } catch (e) {}
+            }
+        }
+
+        function continueSavedLevel() {
+            loadChamberDirect(saveData.highestLevel || 1);
+            resumeOrStartCurrent();
+        }
+
+        function openPauseMenu() {
+            state.playing = false;
+            if (document.pointerLockElement) document.exitPointerLock();
+            renderLevelDirectory();
+            document.getElementById('btn-primary-play').textContent = `RESUME CHAMBER ${String(state.activeLevelNum).padStart(3, '0')}`;
+            document.getElementById('menu-overlay').classList.remove('hidden');
+        }
+
+        function renderLevelDirectory() {
+            const grid = document.getElementById('level-grid');
+            document.getElementById('progress-summary').textContent = `Highest Chamber Reached: ${String(saveData.highestLevel).padStart(3, '0')} / 100`;
+            if (saveData.highestLevel > 1) {
+                const contBtn = document.getElementById('btn-continue-saved');
+                contBtn.classList.remove('hidden');
+                contBtn.textContent = `CONTINUE CHAMBER ${String(saveData.highestLevel).padStart(3, '0')}`;
+            }
+
+            let html = '';
+            for (let i = 1; i <= 100; i++) {
+                const isDone = saveData.completedLevels.includes(i);
+                const isCurrent = i === state.activeLevelNum;
+                const cls = isCurrent
+                    ? 'bg-amber-500 text-stone-950 font-extrabold border-amber-300'
+                    : (isDone
+                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900'
+                        : 'bg-stone-900/90 text-stone-300 border-stone-700/80 hover:border-amber-400/60 hover:text-amber-200');
+                html += `<button onclick="jumpToChamber(${i})" class="py-1.5 rounded border font-mono-tech text-[11px] transition-colors cursor-pointer ${cls}">${String(i).padStart(3, '0')}</button>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        window.jumpToChamber = function (num) {
+            loadChamberDirect(num);
+            resumeOrStartCurrent();
+        };
+
+        // --- LANTERN, UV LENS & AUDIO TOGGLES ---
+        function toggleLantern() {
+            state.lanternOn = !state.lanternOn;
+            lanternLight.intensity = state.lanternOn ? 1.35 : 0;
+            const btn = document.getElementById('btn-lantern');
+            btn.textContent = `Lantern: ${state.lanternOn ? 'ON' : 'OFF'} [F]`;
+            audio.playClick();
+        }
+
+        function toggleUVLens() {
+            if (!state.hasUVLens) {
+                showToast('You have not found the UV Inspector Lens yet.');
+                return;
+            }
+            state.uvActive = !state.uvActive;
+            uvSpotLight.intensity = state.uvActive ? 3.2 : 0;
+            document.getElementById('uv-overlay').classList.toggle('hidden', !state.uvActive);
+            updateEquipmentHUD();
+            audio.playClick();
+        }
+
+        function toggleMute() {
+            state.muted = !state.muted;
+            document.getElementById('btn-audio').textContent = state.muted ? 'SFX: OFF' : 'SFX: ON';
+        }
+
+        // --- INPUT LISTENERS (POINTER LOCK + DRAG FALLBACK + KEYBOARD) ---
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            state.keys[k] = true;
+
+            if (k === 'escape') {
+                if (!document.getElementById('puzzle-modal').classList.contains('hidden')) {
+                    closePuzzleModal();
+                } else if (!document.getElementById('journal-modal').classList.contains('hidden')) {
+                    toggleJournal();
+                } else if (state.playing) {
+                    openPauseMenu();
+                }
+                return;
+            }
+
+            if (!state.playing || state.modalOpen) return;
+
+            if (k === 'e') triggerCrosshairInteract();
+            if (k === 'f') toggleLantern();
+            if (k === 'u') toggleUVLens();
+            if (k === 'tab') {
+                e.preventDefault();
+                toggleJournal();
+            }
+            if (k === 'h') requestProgressiveHint();
+            if (k === 'p') openPauseMenu();
+        });
+
+        window.addEventListener('keyup', (e) => {
+            state.keys[e.key.toLowerCase()] = false;
+        });
+
+        // Mouse Look (Pointer Lock + Click-Drag Fallback)
+        document.addEventListener('mousemove', (e) => {
+            if (!state.playing || state.modalOpen) return;
+            if (document.pointerLockElement === canvas) {
+                state.yaw -= e.movementX * 0.0022;
+                state.pitch = Math.max(-1.35, Math.min(1.35, state.pitch - e.movementY * 0.0022));
+            } else if (state.isDraggingLook) {
+                const dx = e.clientX - state.lastMouseX;
+                const dy = e.clientY - state.lastMouseY;
+                state.lastMouseX = e.clientX;
+                state.lastMouseY = e.clientY;
+                state.yaw -= dx * 0.004;
+                state.pitch = Math.max(-1.35, Math.min(1.35, state.pitch - dy * 0.004));
+            }
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (!state.playing || state.modalOpen) return;
+            if (document.pointerLockElement !== canvas) {
+                state.isDraggingLook = true;
+                state.lastMouseX = e.clientX;
+                state.lastMouseY = e.clientY;
+                if (canvas.requestPointerLock) {
+                    try { canvas.requestPointerLock(); } catch (err) {}
+                }
+            } else if (e.button === 0) {
+                triggerCrosshairInteract();
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            state.isDraggingLook = false;
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- RAYCAST INTERACTION & COLLISION RESOLUTION ---
+        const raycaster = new THREE.Raycaster();
+        raycaster.far = 3.6;
+
+        function triggerCrosshairInteract() {
+            if (state.hoveredObject && state.hoveredObject.userData && state.hoveredObject.userData.onInteract) {
+                state.hoveredObject.userData.onInteract();
+            }
+        }
+
+        function resolvePlayerCollisions(nx, nz) {
+            const activeChamber = loadedChambers.get(state.activeLevelNum);
+            if (!activeChamber) return { x: nx, z: nz };
+
+            const zc = activeChamber.zCenter;
+            const halfW = ROOM_W / 2 - player.radius;
+            const northWallZ = zc - ROOM_D / 2;
+            const southWallZ = zc + ROOM_D / 2;
+
+            // Clamp X within main room (or narrower corridor if passing north doorway)
+            const inNorthCorridor = nz < northWallZ + player.radius && activeChamber.exitUnlocked;
+            const maxAllowedX = inNorthCorridor ? (1.3 - player.radius) : halfW;
+            nx = Math.max(-maxAllowedX, Math.min(maxAllowedX, nx));
+
+            // South rear wall block
+            if (nz > southWallZ - player.radius) {
+                nz = southWallZ - player.radius;
+            }
+
+            // North wall / exit vault door block
+            if (!activeChamber.exitUnlocked) {
+                if (nz < northWallZ + player.radius) {
+                    nz = northWallZ + player.radius;
+                }
+            } else {
+                // If walking through doorway, prevent clipping side door jambs
+                if (nz < northWallZ + player.radius && Math.abs(nx) > 1.3 - player.radius) {
+                    nz = northWallZ + player.radius;
+                }
+            }
+
+            // Furniture AABB collisions
+            for (const box of activeChamber.colliders) {
+                if (nx + player.radius > box.minX && nx - player.radius < box.maxX &&
+                    nz + player.radius > box.minZ && nz - player.radius < box.maxZ) {
+                    // Push out along shallowest axis
+                    const penLeft = (nx + player.radius) - box.minX;
+                    const penRight = box.maxX - (nx - player.radius);
+                    const penTop = (nz + player.radius) - box.minZ;
+                    const penBot = box.maxZ - (nz - player.radius);
+                    const minPen = Math.min(penLeft, penRight, penTop, penBot);
+                    if (minPen === penLeft) nx = box.minX - player.radius;
+                    else if (minPen === penRight) nx = box.maxX + player.radius;
+                    else if (minPen === penTop) nz = box.minZ - player.radius;
+                    else nz = box.maxZ + player.radius;
+                }
+            }
+
+            return { x: nx, z: nz };
+        }
+
+        // --- MAIN SIMULATION LOOP ---
+        let lastFrameTime = performance.now();
+
+        function updateLoop(now) {
+            requestAnimationFrame(updateLoop);
+            const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+
+            // Animate ambient dust motes
+            const posAttr = dustGeo.attributes.position;
+            for (let i = 1; i < posAttr.array.length; i += 3) {
+                posAttr.array[i] += Math.sin(now * 0.001 + i) * 0.0015;
+            }
+            posAttr.needsUpdate = true;
+            dustPoints.position.z = player.pos.z - 10;
+
+            if (state.playing) {
+                state.elapsedSeconds += dt;
+                const mins = Math.floor(state.elapsedSeconds / 60);
+                const secs = Math.floor(state.elapsedSeconds % 60);
+                document.getElementById('hud-timer').textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+
+                // Movement
+                if (!state.modalOpen) {
+                    const moveForward = (state.keys['w'] || state.keys['arrowup'] ? 1 : 0) - (state.keys['s'] || state.keys['arrowdown'] ? 1 : 0);
+                    const moveRight = (state.keys['d'] || state.keys['arrowright'] ? 1 : 0) - (state.keys['a'] || state.keys['arrowleft'] ? 1 : 0);
+                    const speed = state.keys['shift'] ? 5.6 : 3.9;
+
+                    const forwardVec = new THREE.Vector3(-Math.sin(state.yaw), 0, -Math.cos(state.yaw));
+                    const rightVec = new THREE.Vector3(Math.cos(state.yaw), 0, -Math.sin(state.yaw));
+
+                    const moveDir = new THREE.Vector3()
+                        .addScaledVector(forwardVec, moveForward)
+                        .addScaledVector(rightVec, moveRight);
+
+                    if (moveDir.lengthSq() > 0) {
+                        moveDir.normalize();
+                        const nextPos = resolvePlayerCollisions(
+                            player.pos.x + moveDir.x * speed * dt,
+                            player.pos.z + moveDir.z * speed * dt
+                        );
+                        player.pos.x = nextPos.x;
+                        player.pos.z = nextPos.z;
+
+                        state.bobTimer += dt * 11;
+                        state.stepTimer += dt * (state.keys['shift'] ? 1.45 : 1.0);
+                        if (state.stepTimer > 0.48) {
+                            state.stepTimer = 0;
+                            const ch = loadedChambers.get(state.activeLevelNum);
+                            audio.playStep(ch ? ch.spec.theme.stepSound : 'wood');
+                        }
+                    } else {
+                        state.bobTimer = 0;
+                    }
+                }
+
+                // Update Camera Orientation & Head-Bob
+                const bobOffset = Math.sin(state.bobTimer) * 0.045;
+                camera.position.set(player.pos.x, player.height + bobOffset, player.pos.z);
+                const euler = new THREE.Euler(state.pitch, state.yaw, 0, 'YXZ');
+                camera.quaternion.setFromEuler(euler);
+
+                // Animate Active Chamber Doors & UV Glyphs
+                const activeChamber = loadedChambers.get(state.activeLevelNum);
+                if (activeChamber) {
+                    // Swing open Exit Vault Door smoothly once unlocked
+                    if (activeChamber.exitUnlocked && activeChamber.exitOpenAngle < Math.PI * 0.56) {
+                        activeChamber.exitOpenAngle += dt * 1.45;
+                        activeChamber.exitDoorPivot.rotation.y = activeChamber.exitOpenAngle;
+                        activeChamber.doorGear.rotation.z += dt * 3.5;
+                    }
+
+                    // UV Glyph Visibility
+                    activeChamber.uvMeshes.forEach(mesh => {
+                        mesh.material.opacity = state.uvActive ? 0.92 : 0.02;
+                    });
+
+                    // SEAMLESS THRESHOLD CHECK: Did player walk straight through into Chamber N+1?
+                    if (activeChamber.exitUnlocked && activeChamber.levelNum < 100) {
+                        const nextNum = activeChamber.levelNum + 1;
+                        const nextChamber = loadedChambers.get(nextNum);
+                        if (nextChamber) {
+                            const nextSouthDoorZ = nextChamber.zCenter + ROOM_D / 2 - 0.6;
+                            if (player.pos.z < nextSouthDoorZ) {
+                                // Player has physically stepped across the threshold into Chamber N+1!
+                                const prevNum = activeChamber.levelNum;
+                                state.activeLevelNum = nextNum;
+                                state.hintIndex = 0;
+                                saveData.currentLevel = nextNum;
+                                saveData.highestLevel = Math.max(saveData.highestLevel, nextNum);
+                                persistSave();
+
+                                // Bolt rear door behind player & pre-build N+2 ahead
+                                nextChamber.rearDoorClosed = true;
+                                nextChamber.rearDoorPivot.rotation.y = 0;
+                                if (nextNum < 100) buildChamberInstance(nextNum + 1);
+                                disposeChamber(prevNum);
+
+                                updateInventoryHUD(nextChamber);
+                                announceChamberEntry(nextChamber.spec);
+                            }
+                        }
+                    }
+
+                    // Crosshair Raycast Hover Detection
+                    if (!state.modalOpen) {
+                        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                        const hits = raycaster.intersectObjects(activeChamber.interactables, false);
+                        const labelEl = document.getElementById('interact-label');
+                        const textEl = document.getElementById('interact-label-text');
+                        const dotEl = document.getElementById('crosshair-dot');
+
+                        if (hits.length > 0 && hits[0].object.userData && hits[0].object.userData.prompt) {
+                            state.hoveredObject = hits[0].object;
+                            textEl.textContent = hits[0].object.userData.prompt;
+                            labelEl.classList.remove('hidden');
+                            dotEl.classList.add('scale-150', 'bg-amber-400');
+                        } else {
+                            state.hoveredObject = null;
+                            labelEl.classList.add('hidden');
+                            dotEl.classList.remove('scale-150', 'bg-amber-400');
+                        }
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = function () {
+            renderLevelDirectory();
+            loadChamberDirect(saveData.currentLevel || 1);
+            updateLoop(performance.now());
+        };
+    </script>
+</body>
+</html>
