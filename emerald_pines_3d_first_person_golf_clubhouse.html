@@ -1,0 +1,3360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Emerald Pines 3D — First-Person Golf & Clubhouse</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      font-family: 'Inter', sans-serif; background: #0c1911; color: #f8fafc;
+    }
+    #game-canvas {
+      display: block; width: 100%; height: 100%; position: fixed; inset: 0; z-index: 1;
+    }
+    .font-serif-golf { font-family: 'Playfair Display', serif; }
+    .glass-panel {
+      background: rgba(12, 26, 18, 0.82);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    }
+    .glass-gold {
+      background: linear-gradient(135deg, rgba(20, 42, 29, 0.9), rgba(11, 24, 16, 0.94));
+      border: 1px solid rgba(234, 179, 8, 0.38);
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+    }
+    .btn-golf {
+      transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .btn-golf:hover { transform: translateY(-1px); filter: brightness(1.08); }
+    .btn-golf:active { transform: translateY(1px); }
+    #crosshair {
+      position: fixed; top: 50%; left: 50%; width: 14px; height: 14px;
+      transform: translate(-50%, -50%); pointer-events: none; z-index: 15;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute; background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+    #crosshair::before { top: 6px; left: 0; width: 14px; height: 2px; }
+    #crosshair::after { left: 6px; top: 0; width: 2px; height: 14px; }
+    .swing-meter-bar {
+      background: linear-gradient(90deg, #22c55e 0%, #eab308 55%, #f97316 82%, #ef4444 100%);
+    }
+    /* Custom scrollbar for scorecard & modals */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.25); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 999px; }
+  </style>
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- Crosshair (Walk Mode) -->
+  <div id="crosshair" class="hidden"></div>
+
+  <!-- Toast / Broadcast Notification Banner -->
+  <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 pointer-events-none w-full max-w-md px-4"></div>
+
+  <!-- START / WELCOME OVERLAY -->
+  <div id="start-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+    <div class="glass-gold rounded-2xl max-w-2xl w-full p-6 sm:p-8 text-slate-100 max-h-[92vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-amber-400/25 pb-4 mb-5">
+        <div>
+          <span class="text-xs uppercase tracking-widest text-amber-400 font-bold">Championship 9-Hole Resort</span>
+          <h1 class="font-serif-golf text-3xl sm:text-4xl font-extrabold text-white mt-0.5">Emerald Pines 3D</h1>
+          <p class="text-xs sm:text-sm text-emerald-200/80 mt-1">First-Person Golf Simulation &amp; Interactive Clubhouse</p>
+        </div>
+        <div class="w-14 h-14 rounded-2xl bg-emerald-800/70 border border-amber-400/40 flex items-center justify-center text-3xl shadow-inner">
+          ⛳
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 text-xs sm:text-sm">
+        <div class="bg-black/35 rounded-xl p-3.5 border border-white/10">
+          <div class="font-bold text-amber-300 mb-1.5 flex items-center gap-1.5">🚶 First-Person Exploration</div>
+          <ul class="space-y-1 text-slate-300">
+            <li><span class="text-white font-semibold">WASD</span> — Walk around course &amp; Clubhouse</li>
+            <li><span class="text-white font-semibold">Mouse / Drag</span> — Look around (Click screen to lock)</li>
+            <li><span class="text-white font-semibold">Shift</span> — Sprint across fairways</li>
+            <li><span class="text-white font-semibold">[E]</span> — Open doors &amp; use Clubhouse activities</li>
+          </ul>
+        </div>
+        <div class="bg-black/35 rounded-xl p-3.5 border border-white/10">
+          <div class="font-bold text-emerald-300 mb-1.5 flex items-center gap-1.5">🏌️ Golf Swing &amp; Course</div>
+          <ul class="space-y-1 text-slate-300">
+            <li><span class="text-white font-semibold">[F]</span> — Address Ball / Toggle Walk Mode</li>
+            <li><span class="text-white font-semibold">[A / D] or [← / →]</span> — Aim shot left/right</li>
+            <li><span class="text-white font-semibold">[1–6]</span> — Select Club (Driver to Putter)</li>
+            <li><span class="text-white font-semibold">Hold [SPACE] or Hold Click</span> — Power swing &amp; release!</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="bg-emerald-950/60 border border-emerald-500/25 rounded-xl p-3.5 mb-6 text-xs text-emerald-100/90 flex items-start gap-3">
+        <span class="text-xl">🏛️</span>
+        <div>
+          <strong class="text-white">Explore the Expanded Grand Clubhouse:</strong> Walk through the double doors behind the 1st Tee! Upgrade clubs &amp; balls in the <em>Pro Shop</em>, order buffs at the <em>19th Hole Bar</em>, play <em>Arcade Golden Tee</em>, spin tracks on the <em>Clubhouse Jukebox</em>, sink putts on the <em>Indoor Green</em>, test drives on the <em>TrackMan Simulator</em>, or check the <em>Tour Leaderboard</em>.
+        </div>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <button id="btn-start-tee" class="btn-golf flex-1 py-3.5 px-5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-bold text-sm sm:text-base shadow-lg shadow-emerald-950/60 flex items-center justify-center gap-2">
+          <span>🏌️</span> Play 9 Holes
+        </button>
+        <button id="btn-start-18" class="btn-golf flex-1 py-3.5 px-5 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white font-bold text-sm sm:text-base shadow-lg shadow-sky-950/60 flex items-center justify-center gap-2">
+          <span>🏆</span> Play 18 Holes
+        </button>
+        <button id="btn-start-clubhouse" class="btn-golf flex-1 py-3.5 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-600 text-slate-950 font-bold text-sm sm:text-base shadow-lg shadow-amber-950/60 flex items-center justify-center gap-2">
+          <span>🏛️</span> Clubhouse
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP BROADCAST HUD -->
+  <div id="hud-top" class="fixed top-3 left-3 right-3 z-20 flex flex-wrap items-start justify-between gap-2 pointer-events-none hidden">
+    <!-- Left: Hole Broadcast Bug -->
+    <div class="glass-panel rounded-xl p-2.5 sm:p-3 flex items-center gap-3 pointer-events-auto">
+      <div class="bg-emerald-600 text-white rounded-lg px-3 py-1.5 text-center min-w-[60px] shadow">
+        <div class="text-[10px] uppercase tracking-wider font-bold opacity-85">Hole</div>
+        <div id="hud-hole-num" class="text-xl sm:text-2xl font-extrabold leading-none">1</div>
+      </div>
+      <div class="pr-2 border-r border-white/15">
+        <div id="hud-hole-name" class="font-bold text-xs sm:text-sm text-white">Opening Fairway</div>
+        <div class="flex items-center gap-2 text-xs text-emerald-300 font-semibold mt-0.5">
+          <span>PAR <span id="hud-hole-par" class="text-white">4</span></span>
+          <span>•</span>
+          <span><span id="hud-hole-yds" class="text-white">365</span> YDS</span>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-xs">
+        <div>
+          <div class="text-[10px] uppercase text-slate-400 font-semibold">Stroke</div>
+          <div id="hud-stroke" class="text-base sm:text-lg font-extrabold text-amber-300 leading-tight">1</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase text-slate-400 font-semibold">To Pin</div>
+          <div id="hud-dist-pin" class="text-base sm:text-lg font-extrabold text-white leading-tight">365 yds</div>
+        </div>
+        <div class="hidden sm:block">
+          <div class="text-[10px] uppercase text-slate-400 font-semibold">Lie</div>
+          <div id="hud-lie" class="text-sm font-bold text-emerald-300 leading-tight">Tee Box</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center: Wind & Active Buffs -->
+    <div class="glass-panel rounded-xl px-3 py-2 flex items-center gap-3 pointer-events-auto">
+      <div class="flex items-center gap-2">
+        <div id="wind-arrow" class="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-sm font-bold text-sky-300 transition-transform duration-300">↑</div>
+        <div>
+          <div class="text-[10px] uppercase text-slate-400 font-semibold">Wind</div>
+          <div id="hud-wind" class="text-xs font-bold text-white">7 mph N</div>
+        </div>
+      </div>
+      <div class="h-6 w-px bg-white/15"></div>
+      <div>
+        <div class="text-[10px] uppercase text-slate-400 font-semibold">Score</div>
+        <div id="hud-total-score" class="text-xs font-extrabold text-amber-300">E (0)</div>
+      </div>
+      <div id="hud-buff-badge" class="hidden bg-amber-500/20 border border-amber-400/40 text-amber-200 text-[11px] font-semibold px-2 py-1 rounded-lg">
+        ☕ Steady Hands
+      </div>
+    </div>
+
+    <!-- Right: Quick Action Buttons & Radar -->
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <button id="btn-toggle-mode" class="btn-golf glass-panel px-3 py-2 rounded-xl text-xs font-bold text-emerald-300 hover:text-white flex items-center gap-1.5" title="Press F">
+        <span>🏌️</span> <span id="mode-btn-label">Address Ball [F]</span>
+      </button>
+      <button id="btn-summon-cart" class="btn-golf glass-panel px-3 py-2 rounded-xl text-xs font-bold text-amber-200 hover:text-white flex items-center gap-1" title="Drive / Summon Golf Cart [C]">
+        <span>🛺</span> <span id="cart-btn-label">Cart [C]</span>
+      </button>
+      <button id="btn-teleport-ball" class="btn-golf glass-panel px-3 py-2 rounded-xl text-xs font-bold text-slate-200 hover:text-white hidden sm:flex items-center gap-1" title="Walk/Move to Ball [T]">
+        <span>📍</span> To Ball [T]
+      </button>
+      <button id="btn-flyover" class="btn-golf glass-panel px-3 py-2 rounded-xl text-xs font-bold text-sky-300 hover:text-white flex items-center gap-1" title="Overhead Map [M]">
+        <span>🗺️</span> Map [M]
+      </button>
+      <button id="btn-scorecard" class="btn-golf glass-panel px-3 py-2 rounded-xl text-xs font-bold text-amber-300 hover:text-white flex items-center gap-1" title="Scorecard & Holes [Tab]">
+        <span>📋</span> Card
+      </button>
+      <button id="btn-help" class="btn-golf glass-panel px-2.5 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white" title="Controls">
+        ?
+      </button>
+    </div>
+  </div>
+
+  <!-- INTERACTION PROMPT (Contextual [E] Prompt when near doors/clubhouse stations/ball) -->
+  <div id="interact-prompt" class="fixed bottom-32 left-1/2 -translate-x-1/2 z-30 hidden pointer-events-none">
+    <div class="glass-gold px-4 py-2 rounded-full flex items-center gap-2.5 text-sm font-bold text-white shadow-xl animate-bounce">
+      <span class="bg-amber-400 text-slate-950 text-xs font-extrabold px-2 py-0.5 rounded-md">E</span>
+      <span id="interact-text">Interact</span>
+    </div>
+  </div>
+
+  <!-- SWING MODE HUD (Asymmetric Right-Side Controls, Curved Swing Arc & Club Bag — keeps lower-left golfer & ball completely clear!) -->
+  <div id="swing-hud" class="fixed bottom-3 right-3 left-3 sm:left-auto z-20 flex flex-col items-end gap-2.5 pointer-events-none hidden">
+    <!-- Swing Power & Accuracy Card with Curved Arc Gauge -->
+    <div class="glass-panel rounded-2xl p-3.5 w-full sm:w-[340px] pointer-events-auto">
+      <div class="flex items-center gap-3">
+        <!-- Circular / Curved Swing Power & Sweet-Spot Arc -->
+        <div class="relative w-20 h-20 shrink-0 flex items-center justify-center">
+          <svg class="w-full h-full -rotate-90" viewBox="0 0 80 80">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="7" />
+            <!-- Sweet-spot target zone around 85% -->
+            <circle cx="40" cy="40" r="32" fill="none" stroke="rgba(250,204,21,0.55)" stroke-width="7"
+                    stroke-dasharray="22 201" stroke-dashoffset="-155" stroke-linecap="round" />
+            <!-- Dynamic Power Fill Arc -->
+            <circle id="swing-arc-fill" cx="40" cy="40" r="32" fill="none" stroke="#22c55e" stroke-width="7"
+                    stroke-dasharray="201" stroke-dashoffset="201" stroke-linecap="round" />
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span class="text-sm font-extrabold text-amber-300 leading-none" id="swing-power-pct">0%</span>
+            <span class="text-[9px] uppercase tracking-wider text-slate-400 mt-0.5">Power</span>
+          </div>
+        </div>
+
+        <div class="flex-1 min-w-0">
+          <div class="text-[10px] uppercase tracking-wider text-emerald-300 font-bold">Third-Person Stance</div>
+          <div class="font-bold text-xs text-white leading-snug mt-0.5" id="swing-status-text">Hold [SPACE] or Hold Swing</div>
+          <div class="relative h-2.5 w-full bg-black/60 rounded-full overflow-hidden border border-white/15 mt-2">
+            <div id="swing-sweetspot" class="absolute top-0 bottom-0 w-1.5 bg-white z-10 rounded-full" style="left: 84%;"></div>
+            <div id="swing-fill" class="h-full swing-meter-bar rounded-full transition-none" style="width: 0%;"></div>
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-slate-300 mt-1">
+            <span>Est. Carry: <strong class="text-amber-300" id="swing-est-yds">225 yds</strong></span>
+            <span><strong class="text-white">WASD</strong> to Walk</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap justify-between items-center gap-1.5 mt-3 pt-2.5 border-t border-white/10 text-[11px] text-slate-300">
+        <div class="flex items-center gap-1">
+          <button id="btn-aim-left" class="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 font-bold text-white">◀ [A]</button>
+          <button id="btn-aim-right" class="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 font-bold text-white">[D] ▶</button>
+        </div>
+        <button id="btn-toggle-arc" class="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 font-semibold">
+          Arc: ON
+        </button>
+        <button id="btn-swing-touch" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold shadow">
+          HOLD SWING
+        </button>
+      </div>
+    </div>
+
+    <!-- Right-Aligned Club Bag Selector -->
+    <div id="club-selector" class="glass-panel rounded-2xl p-1.5 flex items-center gap-1.5 overflow-x-auto max-w-full sm:max-w-[440px] pointer-events-auto">
+      <!-- Populated dynamically -->
+    </div>
+  </div>
+
+  <!-- WALK MODE MOBILE / QUICK BAR -->
+  <div id="walk-hud" class="fixed bottom-3 left-3 right-3 z-20 flex items-end justify-between pointer-events-none hidden">
+    <!-- Minimap Radar -->
+    <div class="glass-panel rounded-2xl p-1.5 pointer-events-auto">
+      <canvas id="minimap-canvas" width="136" height="136" class="rounded-xl block"></canvas>
+      <div class="text-[10px] text-center text-slate-300 font-semibold mt-1" id="zone-label">Hole 1 • Fairway</div>
+    </div>
+
+    <!-- Walk controls helper & touch pad -->
+    <div class="flex flex-col items-end gap-2 pointer-events-auto">
+      <div class="glass-panel rounded-xl px-3 py-2 text-[11px] text-slate-300 hidden md:block">
+        <span class="text-white font-bold">WASD</span> Walk • <span class="text-white font-bold">Shift</span> Sprint • <span class="text-white font-bold">E</span> Interact • <span class="text-white font-bold">F</span> Address Ball • <span class="text-white font-bold">T</span> Teleport to Ball
+      </div>
+      <!-- Touch D-Pad for mobile/tablet users -->
+      <div class="grid grid-cols-3 gap-1 sm:hidden bg-black/50 p-1.5 rounded-2xl border border-white/15">
+        <div></div>
+        <button data-move="forward" class="w-11 h-11 rounded-xl bg-white/15 active:bg-emerald-500 font-bold text-white">▲</button>
+        <button id="btn-mobile-interact" class="w-11 h-11 rounded-xl bg-amber-500/80 font-bold text-slate-950 text-xs">USE</button>
+        <button data-move="left" class="w-11 h-11 rounded-xl bg-white/15 active:bg-emerald-500 font-bold text-white">◀</button>
+        <button data-move="backward" class="w-11 h-11 rounded-xl bg-white/15 active:bg-emerald-500 font-bold text-white">▼</button>
+        <button data-move="right" class="w-11 h-11 rounded-xl bg-white/15 active:bg-emerald-500 font-bold text-white">▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOLE COMPLETE MODAL -->
+  <div id="hole-complete-modal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm hidden">
+    <div class="glass-gold rounded-2xl max-w-md w-full p-6 text-center">
+      <div class="text-4xl mb-2" id="hc-emoji">🏆</div>
+      <div class="text-xs uppercase tracking-widest text-amber-400 font-bold" id="hc-hole-subtitle">Hole 1 Complete</div>
+      <h2 class="font-serif-golf text-3xl font-extrabold text-white mt-1" id="hc-result-title">BIRDIE!</h2>
+      <p class="text-sm text-slate-300 mt-1" id="hc-result-desc">Sunk in 3 strokes on a Par 4</p>
+      <div class="grid grid-cols-3 gap-2 my-5 bg-black/40 rounded-xl p-3 border border-white/10">
+        <div>
+          <div class="text-[10px] uppercase text-slate-400">Par</div>
+          <div class="text-lg font-extrabold text-white" id="hc-par">4</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase text-slate-400">Strokes</div>
+          <div class="text-lg font-extrabold text-amber-300" id="hc-strokes">3</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase text-slate-400">Total</div>
+          <div class="text-lg font-extrabold text-emerald-300" id="hc-total">-1</div>
+        </div>
+      </div>
+      <div class="flex gap-2.5">
+        <button id="btn-next-hole" class="btn-golf flex-1 py-3 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm">
+          Next Hole ▶
+        </button>
+        <button id="btn-visit-clubhouse-hc" class="btn-golf py-3 px-4 rounded-xl bg-amber-500/20 border border-amber-400/40 text-amber-200 font-bold text-sm">
+          🏛️ Clubhouse
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCORECARD & HOLE WARP MODAL -->
+  <div id="scorecard-modal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+    <div class="glass-gold rounded-2xl max-w-3xl w-full p-5 sm:p-6 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-white/15 pb-3 mb-4">
+        <div>
+          <h2 class="font-serif-golf text-2xl font-extrabold text-white">Emerald Pines Scorecard</h2>
+          <p class="text-xs text-slate-300" id="scorecard-subtitle">9-Hole Championship Course • Par 36 • Click any hole to travel there</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="btn-toggle-round-len" class="btn-golf px-3 py-1.5 rounded-xl bg-sky-500/25 border border-sky-400/40 text-sky-200 text-xs font-bold">
+            Switch to 18 Holes
+          </button>
+          <button id="btn-close-scorecard" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold">✕</button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto mb-5" id="scorecard-tables-wrap">
+        <!-- Filled dynamically for 9 or 18 holes -->
+      </div>
+
+      <div class="mb-4">
+        <div class="text-xs uppercase tracking-wider text-amber-300 font-bold mb-2">Quick Travel &amp; Course Locations</div>
+        <div id="hole-warp-grid" class="grid grid-cols-2 sm:grid-cols-6 gap-2">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <div class="flex flex-wrap justify-between items-center gap-2 pt-3 border-t border-white/15">
+        <button id="btn-reset-round" class="btn-golf px-4 py-2 rounded-xl bg-red-500/20 border border-red-400/40 text-red-200 text-xs font-bold">
+          ↺ Reset Round
+        </button>
+        <button id="btn-warp-clubhouse" class="btn-golf px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold">
+          🏛️ Enter Clubhouse Lobby
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLUBHOUSE ACTIVITY MODAL (Pro Shop, Bar, Simulator, Trophy Case) -->
+  <div id="clubhouse-modal" class="fixed inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+    <div class="glass-gold rounded-2xl max-w-xl w-full p-5 sm:p-6 max-h-[88vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-amber-400/25 pb-3 mb-4">
+        <div class="flex items-center gap-2.5">
+          <span class="text-2xl" id="ch-modal-icon">🏛️</span>
+          <div>
+            <h2 class="font-serif-golf text-xl sm:text-2xl font-extrabold text-white" id="ch-modal-title">Clubhouse Station</h2>
+            <p class="text-xs text-amber-200/80" id="ch-modal-subtitle">Emerald Pines Members Lounge</p>
+          </div>
+        </div>
+        <button id="btn-close-ch-modal" class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold">✕</button>
+      </div>
+      <div id="ch-modal-content" class="space-y-3 text-sm">
+        <!-- Station content injected here -->
+      </div>
+    </div>
+  </div>
+
+<script>
+/**
+ * ============================================================================
+ * EMERALD PINES 3D — FIRST-PERSON GOLF GAME & INTERACTIVE CLUBHOUSE
+ * Complete Single-File Three.js Engine, Physics, Procedural Audio & Gameplay
+ * ============================================================================
+ */
+
+// ----------------------------------------------------------------------------
+// 1. THREE.JS SCENE, RENDERER & LIGHTING SETUP
+// ----------------------------------------------------------------------------
+const canvas = document.getElementById('game-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.FogExp2(0x9bd6f0, 0.00145);
+
+const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.15, 1100);
+
+// Sky & Ambient Sunlight
+const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x2d5a36, 0.82);
+scene.add(hemiLight);
+
+const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
+sunLight.position.set(160, 240, 120);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.camera.near = 10;
+sunLight.shadow.camera.far = 750;
+const dShadow = 260;
+sunLight.shadow.camera.left = -dShadow;
+sunLight.shadow.camera.right = dShadow;
+sunLight.shadow.camera.top = dShadow;
+sunLight.shadow.camera.bottom = -dShadow;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+
+// Decorative Sun Sphere & Soft Clouds
+const sunDisc = new THREE.Mesh(
+  new THREE.SphereGeometry(18, 16, 16),
+  new THREE.MeshBasicMaterial({ color: 0xfef08a })
+);
+sunDisc.position.set(320, 420, 240);
+scene.add(sunDisc);
+
+// ----------------------------------------------------------------------------
+// 2. PROCEDURAL WEB AUDIO SOUND ENGINE (Zero External Audio Dependencies)
+// ----------------------------------------------------------------------------
+class GolfSoundEngine {
+  constructor() {
+    this.ctx = null;
+  }
+  init() {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) this.ctx = new AudioCtx();
+    }
+    if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  playClubHit(type = 'iron', power = 0.8) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type === 'driver' ? 'triangle' : type === 'putter' ? 'sine' : 'sawtooth';
+    const baseFreq = type === 'driver' ? 210 : type === 'putter' ? 140 : 320;
+    osc.frequency.setValueAtTime(baseFreq + power * 120, now);
+    osc.frequency.exponentialRampToValueAtTime(55, now + 0.11);
+
+    gain.gain.setValueAtTime(Math.min(0.45, 0.15 + power * 0.35), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.14);
+  }
+  playCupRattle() {
+    if (!this.ctx) return;
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, i) => {
+      const now = this.ctx.currentTime + i * 0.075;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.26);
+    });
+  }
+  playWaterSplash() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const bufferSize = this.ctx.sampleRate * 0.35;
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.35));
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(650, now);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start(now);
+  }
+  playSandThud() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(38, now + 0.16);
+    gain.gain.setValueAtTime(0.28, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+  playUiChime() {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.setValueAtTime(880, now + 0.06);
+    gain.gain.setValueAtTime(0.14, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.19);
+  }
+}
+const sound = new GolfSoundEngine();
+
+// ----------------------------------------------------------------------------
+// 3. CLUBS, EQUIPMENT SETS, BALL STYLES & 9-HOLE CHAMPIONSHIP COURSE DATA
+// ----------------------------------------------------------------------------
+const BASE_CLUBS = [
+  { id: 'dr', short: 'DR', name: 'Driver', maxYds: 265, loftDeg: 11.5, spin: 0.18, type: 'driver', putter: false },
+  { id: '5i', short: '5I', name: '5-Iron', maxYds: 205, loftDeg: 24, spin: 0.32, type: 'iron', putter: false },
+  { id: '7i', short: '7I', name: '7-Iron', maxYds: 168, loftDeg: 32, spin: 0.45, type: 'iron', putter: false },
+  { id: 'pw', short: 'PW', name: 'Pitching Wedge', maxYds: 128, loftDeg: 44, spin: 0.62, type: 'iron', putter: false },
+  { id: 'sw', short: 'SW', name: 'Sand Wedge', maxYds: 92, loftDeg: 54, spin: 0.78, type: 'iron', putter: false },
+  { id: 'pt', short: 'PT', name: 'Putter', maxYds: 38, loftDeg: 0, spin: 0, type: 'putter', putter: true }
+];
+
+const CLUB_SETS = {
+  classic: { name: 'Emerald Member Irons', powerMult: 1.0, accuracyBonus: 0.0, headColor: 0x334155, shaftColor: 0xcbd5e1 },
+  tour: { name: 'Pro Forged Titanium Set', powerMult: 1.06, accuracyBonus: 0.18, headColor: 0x0f172a, shaftColor: 0x94a3b8 },
+  gold: { name: '24K Championship Gold Edition', powerMult: 1.11, accuracyBonus: 0.30, headColor: 0xeab308, shaftColor: 0xfef08a }
+};
+
+const BALL_STYLES = {
+  white: { name: 'Tour Pro White', color: 0xffffff, emissive: 0x000000, trail: 0xffffff },
+  gold: { name: 'Championship Gold', color: 0xfacc15, emissive: 0x422006, trail: 0xfef08a },
+  neon: { name: 'Hi-Vis Neon Lime', color: 0xa3e635, emissive: 0x1a2e05, trail: 0xd9f99d },
+  ruby: { name: 'Crimson Tour Pearl', color: 0xf43f5e, emissive: 0x3b0712, trail: 0xfda4af }
+};
+
+// 9 Realistic Championship Holes (Par 36) laid out across a contiguous open world
+const FRONT_9_DATA = [
+  {
+    num: 1, name: 'Opening Fairway', par: 4,
+    tee: { x: 0, z: 16 }, pin: { x: 0, z: -220 }, greenRadius: 15,
+    fairways: [{ x: 0, z: -102, w: 34, l: 215, rot: 0 }],
+    bunkers: [{ x: -16, z: -206, rx: 8, rz: 6 }, { x: 17, z: -214, rx: 7, rz: 8 }],
+    waters: []
+  },
+  {
+    num: 2, name: 'Pine Valley', par: 3,
+    tee: { x: 42, z: -225 }, pin: { x: 175, z: -225 }, greenRadius: 14,
+    fairways: [{ x: 108, z: -225, w: 26, l: 118, rot: Math.PI / 2 }],
+    bunkers: [{ x: 162, z: -208, rx: 9, rz: 6 }, { x: 166, z: -242, rx: 8, rz: 6 }],
+    waters: []
+  },
+  {
+    num: 3, name: 'Dogleg Right', par: 4,
+    tee: { x: 205, z: -205 }, pin: { x: 280, z: 85 }, greenRadius: 15,
+    fairways: [
+      { x: 205, z: -105, w: 32, l: 185, rot: 0 },
+      { x: 245, z: 15, w: 32, l: 155, rot: 0.46 }
+    ],
+    bunkers: [{ x: 256, z: 75, rx: 8, rz: 7 }, { x: 224, z: -40, rx: 9, rz: 11 }],
+    waters: []
+  },
+  {
+    num: 4, name: 'Lagoon Crossing', par: 3,
+    tee: { x: 265, z: 125 }, pin: { x: 135, z: 195 }, greenRadius: 15,
+    fairways: [{ x: 245, z: 136, w: 22, l: 34, rot: -1.08 }],
+    bunkers: [{ x: 124, z: 210, rx: 8, rz: 6 }],
+    waters: [{ x: 195, z: 162, rx: 36, rz: 28 }]
+  },
+  {
+    num: 5, name: 'The Long Ridge', par: 5,
+    tee: { x: 95, z: 215 }, pin: { x: -275, z: 215 }, greenRadius: 16,
+    fairways: [
+      { x: -5, z: 215, w: 36, l: 185, rot: Math.PI / 2 },
+      { x: -175, z: 215, w: 36, l: 185, rot: Math.PI / 2 }
+    ],
+    bunkers: [{ x: -115, z: 194, rx: 11, rz: 7 }, { x: -255, z: 232, rx: 9, rz: 7 }],
+    waters: []
+  },
+  {
+    num: 6, name: 'Sand Trap Canyon', par: 4,
+    tee: { x: -295, z: 180 }, pin: { x: -295, z: -85 }, greenRadius: 15,
+    fairways: [{ x: -295, z: 48, w: 33, l: 245, rot: 0 }],
+    bunkers: [
+      { x: -312, z: 65, rx: 9, rz: 14 },
+      { x: -278, z: 15, rx: 9, rz: 14 },
+      { x: -310, z: -72, rx: 8, rz: 7 },
+      { x: -280, z: -72, rx: 8, rz: 7 }
+    ],
+    waters: []
+  },
+  {
+    num: 7, name: 'Lakeside Bend', par: 4,
+    tee: { x: -275, z: -125 }, pin: { x: -110, z: -315 }, greenRadius: 15,
+    fairways: [{ x: -192, z: -220, w: 34, l: 235, rot: 0.72 }],
+    bunkers: [{ x: -126, z: -302, rx: 8, rz: 6 }],
+    waters: [{ x: -158, z: -245, rx: 28, rz: 22 }]
+  },
+  {
+    num: 8, name: 'Highland Drop', par: 3,
+    tee: { x: -80, z: -335 }, pin: { x: 55, z: -335 }, greenRadius: 14,
+    fairways: [{ x: -12, z: -335, w: 26, l: 120, rot: Math.PI / 2 }],
+    bunkers: [{ x: 42, z: -318, rx: 8, rz: 6 }, { x: 44, z: -352, rx: 8, rz: 6 }],
+    waters: []
+  },
+  {
+    num: 9, name: 'Clubhouse Home', par: 5,
+    tee: { x: 75, z: -305 }, pin: { x: -45, z: 10 }, greenRadius: 17,
+    fairways: [
+      { x: 45, z: -215, w: 36, l: 175, rot: -0.35 },
+      { x: -10, z: -75, w: 38, l: 175, rot: -0.35 }
+    ],
+    bunkers: [{ x: -64, z: -4, rx: 10, rz: 7 }, { x: -26, z: -8, rx: 9, rz: 7 }],
+    waters: [{ x: -78, z: -55, rx: 24, rz: 20 }]
+  }
+];
+
+const BACK_9_NAMES = [
+  'Championship Pines', 'Whispering Creek', 'Golden Dogleg',
+  'Emerald Lagoon', 'Summit Ridge', 'Dunes Gauntlet',
+  'Mirror Lake', 'Champion’s Drop', 'Grand Clubhouse Finale'
+];
+
+// Full 18-Hole Championship Course (Front 9 + Back 9 Championship Pins)
+const HOLES_DATA = [
+  ...FRONT_9_DATA,
+  ...FRONT_9_DATA.map((h, i) => ({
+    ...h,
+    num: i + 10,
+    name: BACK_9_NAMES[i]
+  }))
+];
+
+// ----------------------------------------------------------------------------
+// 4. GLOBAL GAME STATE
+// ----------------------------------------------------------------------------
+const state = {
+  started: false,
+  mode: 'swing', // 'swing' | 'walk' | 'cart' | 'flyover'
+  totalHoles: 9, // 9 or 18
+  currentHoleIdx: 0,
+  strokes: Array(18).fill(0),
+  holeCompleted: Array(18).fill(false),
+  bestRoundScore: null,
+
+  // Ball physics state
+  ballPos: new THREE.Vector3(0, 0.14, 16),
+  lastSafeBallPos: new THREE.Vector3(0, 0.14, 16),
+  ballVel: new THREE.Vector3(0, 0, 0),
+  ballSpin: 0,
+  ballInFlight: false,
+  ballAtRest: true,
+  ballTrailPoints: [],
+
+  // Aim & Swing state
+  aimYaw: Math.PI,
+  selectedClubIdx: 0,
+  isChargingSwing: false,
+  swingPower: 0,
+  swingDir: 1,
+  swingAnimating: false,
+  swingAnimProgress: 0,
+  pendingShotData: null,
+  showAimLine: true,
+
+  // Player first-person walk state
+  playerPos: new THREE.Vector3(0, 1.78, 22),
+  playerYaw: 0,
+  playerPitch: -0.04,
+  keys: {},
+  touchMove: { forward: false, backward: false, left: false, right: false },
+
+  // Drivable Golf Cart state
+  cartPos: new THREE.Vector3(8.5, 0, 18),
+  cartYaw: Math.PI,
+  cartSpeed: 0,
+  cartSteer: 0,
+  cartWheelSpin: 0,
+
+  // Environment & Clubhouse state
+  windSpeed: 7,
+  windAngle: 0,
+  doorsOpen: false,
+  doorAngle: 0,
+  activeInteractable: null,
+  equippedSet: 'classic',
+  equippedBall: 'white',
+  activeBuff: null,
+  simHits: 0,
+  simScore: 0,
+  indoorPuttsMade: 0
+};
+
+// Shared world collections
+const colliders = [];
+const interactables = [];
+const holeFlagMeshes = [];
+let leftDoorPivot = null;
+let rightDoorPivot = null;
+let fireplaceLight = null;
+let fireplaceFlame = null;
+let indoorPuttingBall = null;
+let indoorHolePos = null;
+let simScreenCtx = null;
+let simScreenTex = null;
+let jukeboxMusicTimer = null;
+let jukeboxTrackIdx = 0;
+
+const JUKEBOX_TRACKS = [
+  { name: 'Clubhouse Sunset Jazz', notes: [261.63, 329.63, 392.00, 493.88, 392.00, 329.63], tempo: 520 },
+  { name: 'Augusta Pines Bossa', notes: [293.66, 349.23, 440.00, 523.25, 440.00, 349.23], tempo: 440 },
+  { name: '19th Hole Victory Lounge', notes: [329.63, 415.30, 493.88, 659.25, 493.88, 415.30], tempo: 480 }
+];
+
+function toggleJukeboxMusic(forceNext = false) {
+  sound.init();
+  if (jukeboxMusicTimer && !forceNext) {
+    clearInterval(jukeboxMusicTimer);
+    jukeboxMusicTimer = null;
+    showToast('🎵 Jukebox paused');
+    return false;
+  }
+  if (jukeboxMusicTimer) clearInterval(jukeboxMusicTimer);
+  if (forceNext) jukeboxTrackIdx = (jukeboxTrackIdx + 1) % JUKEBOX_TRACKS.length;
+  const track = JUKEBOX_TRACKS[jukeboxTrackIdx];
+  let step = 0;
+  jukeboxMusicTimer = setInterval(() => {
+    if (!sound.ctx) return;
+    const freq = track.notes[step % track.notes.length];
+    step++;
+    const now = sound.ctx.currentTime;
+    const osc = sound.ctx.createOscillator();
+    const gain = sound.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.055, now);
+    gain.gain.exponentialRampToValueAtTime(0.0008, now + 0.42);
+    osc.connect(gain);
+    gain.connect(sound.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.44);
+  }, track.tempo);
+  showToast(`🎶 Now Playing: ${track.name}`);
+  return true;
+}
+
+// ----------------------------------------------------------------------------
+// 5. PROCEDURAL TEXTURES
+// ----------------------------------------------------------------------------
+function createGrassTexture(baseHex, stripeHex) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = baseHex;
+  ctx.fillRect(0, 0, 256, 256);
+  ctx.fillStyle = stripeHex;
+  ctx.fillRect(0, 0, 256, 128);
+  for (let i = 0; i < 2400; i++) {
+    ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.045)' : 'rgba(0,0,0,0.055)';
+    ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(40, 40);
+  return tex;
+}
+
+function createWoodFloorTexture() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#784824';
+  ctx.fillRect(0, 0, 256, 256);
+  for (let y = 0; y < 256; y += 32) {
+    ctx.fillStyle = (y / 32) % 2 === 0 ? '#855129' : '#6c3f1e';
+    ctx.fillRect(0, y, 256, 30);
+    ctx.fillStyle = '#4a2912';
+    ctx.fillRect(0, y + 30, 256, 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(8, 8);
+  return tex;
+}
+
+// ----------------------------------------------------------------------------
+// 6. BUILD 9-HOLE CHAMPIONSHIP GOLF COURSE
+// ----------------------------------------------------------------------------
+function buildCourse() {
+  // Base Rough Terrain
+  const roughTex = createGrassTexture('#23542d', '#1e4a27');
+  const groundMat = new THREE.MeshStandardMaterial({ map: roughTex, roughness: 0.92 });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1100, 1100), groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  const fairwayTex = createGrassTexture('#378b45', '#2f7a3c');
+  fairwayTex.repeat.set(4, 14);
+  const fairwayMat = new THREE.MeshStandardMaterial({ map: fairwayTex, roughness: 0.8 });
+  const greenMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.58 });
+  const fringeMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.72 });
+  const teeMat = new THREE.MeshStandardMaterial({ color: 0x34d399, roughness: 0.68 });
+  const bunkerMat = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.96 });
+  const waterMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.14, metalness: 0.35 });
+
+  HOLES_DATA.forEach((hole, idx) => {
+    // Tee Box Platform & Tee Markers
+    const teeMesh = new THREE.Mesh(new THREE.BoxGeometry(9.5, 0.12, 11.5), teeMat);
+    teeMesh.position.set(hole.tee.x, 0.06, hole.tee.z);
+    teeMesh.receiveShadow = true;
+    scene.add(teeMesh);
+
+    [-2.4, 2.4].forEach(offsetX => {
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 12, 12),
+        new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 })
+      );
+      marker.position.set(hole.tee.x + offsetX, 0.22, hole.tee.z);
+      scene.add(marker);
+    });
+
+    // Fairway Strips
+    hole.fairways.forEach(fw => {
+      const fwMesh = new THREE.Mesh(new THREE.PlaneGeometry(fw.w, fw.l), fairwayMat);
+      fwMesh.rotation.x = -Math.PI / 2;
+      fwMesh.rotation.z = -fw.rot;
+      fwMesh.position.set(fw.x, 0.02, fw.z);
+      fwMesh.receiveShadow = true;
+      scene.add(fwMesh);
+    });
+
+    // Putting Green + Fringe + Cup + Flagstick
+    const fringe = new THREE.Mesh(new THREE.CircleGeometry(hole.greenRadius + 2.2, 36), fringeMat);
+    fringe.rotation.x = -Math.PI / 2;
+    fringe.position.set(hole.pin.x, 0.025, hole.pin.z);
+    fringe.receiveShadow = true;
+    scene.add(fringe);
+
+    const green = new THREE.Mesh(new THREE.CircleGeometry(hole.greenRadius, 36), greenMat);
+    green.rotation.x = -Math.PI / 2;
+    green.position.set(hole.pin.x, 0.035, hole.pin.z);
+    green.receiveShadow = true;
+    scene.add(green);
+
+    // Dark Cup Rim
+    const cup = new THREE.Mesh(
+      new THREE.CircleGeometry(0.26, 20),
+      new THREE.MeshBasicMaterial({ color: 0x090d0a })
+    );
+    cup.rotation.x = -Math.PI / 2;
+    cup.position.set(hole.pin.x, 0.042, hole.pin.z);
+    scene.add(cup);
+
+    // Flagpole & Pennant
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 3.4, 10),
+      new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.4 })
+    );
+    pole.position.set(hole.pin.x, 1.72, hole.pin.z);
+    pole.castShadow = true;
+    scene.add(pole);
+
+    if (idx < 9) {
+      const flagPivot = new THREE.Group();
+      flagPivot.position.set(hole.pin.x, 3.15, hole.pin.z);
+      const flagMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.95, 0.52, 0.04),
+        new THREE.MeshStandardMaterial({ color: idx === 8 ? 0xfacc15 : 0xef4444, roughness: 0.5 })
+      );
+      flagMesh.position.set(0.48, 0, 0);
+      flagPivot.add(flagMesh);
+      scene.add(flagPivot);
+      holeFlagMeshes.push(flagPivot);
+    }
+
+    // Sand Bunkers
+    hole.bunkers.forEach(b => {
+      const bunker = new THREE.Mesh(new THREE.CircleGeometry(1, 28), bunkerMat);
+      bunker.rotation.x = -Math.PI / 2;
+      bunker.scale.set(b.rx, b.rz, 1);
+      bunker.position.set(b.x, 0.03, b.z);
+      bunker.receiveShadow = true;
+      scene.add(bunker);
+    });
+
+    // Water Hazards
+    hole.waters.forEach(w => {
+      const water = new THREE.Mesh(new THREE.CircleGeometry(1, 32), waterMat);
+      water.rotation.x = -Math.PI / 2;
+      water.scale.set(w.rx, w.rz, 1);
+      water.position.set(w.x, 0.03, w.z);
+      scene.add(water);
+    });
+  });
+
+  // Scatter Scenic Pine & Oak Trees framing fairways without blocking tee shots
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+  const pineMat = new THREE.MeshStandardMaterial({ color: 0x164224, roughness: 0.85 });
+  const oakMat = new THREE.MeshStandardMaterial({ color: 0x266335, roughness: 0.8 });
+
+  let seed = 42;
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296;
+    return seed / 4294967296;
+  };
+
+  for (let i = 0; i < 240; i++) {
+    const tx = (rand() - 0.5) * 760;
+    const tz = -390 + rand() * 680;
+    const surf = getSurfaceAt(tx, tz);
+    if (surf !== 'rough') continue;
+
+    // Keep clear of Clubhouse plaza & 1st Tee
+    if (Math.abs(tx) < 42 && tz > -5 && tz < 92) continue;
+
+    const tree = new THREE.Group();
+    const scale = 0.85 + rand() * 0.75;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.48, 3.2, 7), trunkMat);
+    trunk.position.y = 1.6;
+    trunk.castShadow = true;
+    tree.add(trunk);
+
+    if (rand() > 0.35) {
+      // Tiered Pine Tree
+      for (let tier = 0; tier < 3; tier++) {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(2.6 - tier * 0.55, 3.6, 8), pineMat);
+        cone.position.y = 3.8 + tier * 1.9;
+        cone.castShadow = true;
+        tree.add(cone);
+      }
+    } else {
+      // Broadleaf Parkland Tree
+      const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(3.1, 1), oakMat);
+      crown.position.y = 5.2;
+      crown.castShadow = true;
+      tree.add(crown);
+    }
+
+    tree.position.set(tx, 0, tz);
+    tree.scale.setScalar(scale);
+    scene.add(tree);
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 9B. DRIVABLE 3D GOLF CART (Third-Person Driving + Seated Golfer Driver)
+// ----------------------------------------------------------------------------
+const golfCartGroup = new THREE.Group();
+const cartWheels = [];
+let cartSteeringWheel = null;
+let cartDriverModel = null;
+
+function buildGolfCart() {
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35, metalness: 0.15 });
+  const trimMat = new THREE.MeshStandardMaterial({ color: 0x065f46, roughness: 0.5 });
+  const seatMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.7 });
+  const tireMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.85 });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.75, roughness: 0.25 });
+  const roofCanopyMat = new THREE.MeshStandardMaterial({ color: 0xfafaf9, roughness: 0.4 });
+  const windshieldMat = new THREE.MeshStandardMaterial({
+    color: 0xbae6fd, transparent: true, opacity: 0.38, roughness: 0.1
+  });
+
+  // Lower Chassis & Floorboard
+  const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.24, 2.55), trimMat);
+  chassis.position.set(0, 0.36, 0);
+  chassis.castShadow = true;
+  golfCartGroup.add(chassis);
+
+  // Front Hood & Rear Golf Bag Well
+  const frontHood = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.46, 0.85), bodyMat);
+  frontHood.position.set(0, 0.62, 0.82);
+  frontHood.castShadow = true;
+  golfCartGroup.add(frontHood);
+
+  const rearBody = new THREE.Mesh(new THREE.BoxGeometry(1.38, 0.48, 0.92), bodyMat);
+  rearBody.position.set(0, 0.62, -0.78);
+  rearBody.castShadow = true;
+  golfCartGroup.add(rearBody);
+
+  // Bench Seat & Backrest
+  const benchSeat = new THREE.Mesh(new THREE.BoxGeometry(1.26, 0.18, 0.62), seatMat);
+  benchSeat.position.set(0, 0.78, -0.18);
+  benchSeat.castShadow = true;
+  golfCartGroup.add(benchSeat);
+
+  const seatBack = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.46, 0.16), seatMat);
+  seatBack.position.set(0, 1.06, -0.44);
+  seatBack.castShadow = true;
+  golfCartGroup.add(seatBack);
+
+  // Two Golf Bags Strapped on the Back Rack
+  [-0.3, 0.3].forEach((bx, idx) => {
+    const bag = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.14, 0.92, 12),
+      new THREE.MeshStandardMaterial({ color: idx === 0 ? 0x15803d : 0x1e3a8a, roughness: 0.65 })
+    );
+    bag.position.set(bx, 1.05, -1.08);
+    bag.rotation.x = -0.22;
+    bag.castShadow = true;
+    golfCartGroup.add(bag);
+  });
+
+  // Canopy Roof & 4 Support Struts + Windshield
+  const canopy = new THREE.Mesh(new THREE.BoxGeometry(1.44, 0.1, 1.85), roofCanopyMat);
+  canopy.position.set(0, 1.98, -0.15);
+  canopy.castShadow = true;
+  golfCartGroup.add(canopy);
+
+  [[-0.64, 0.68], [0.64, 0.68], [-0.64, -0.92], [0.64, -0.92]].forEach(([sx, sz]) => {
+    const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.25, 8), tireMat);
+    strut.position.set(sx, 1.38, sz);
+    golfCartGroup.add(strut);
+  });
+
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.24, 0.78, 0.04), windshieldMat);
+  windshield.position.set(0, 1.42, 0.66);
+  windshield.rotation.x = -0.14;
+  golfCartGroup.add(windshield);
+
+  // Headlights
+  [-0.48, 0.48].forEach(hx => {
+    const lamp = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 10, 10),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a })
+    );
+    lamp.position.set(hx, 0.66, 1.25);
+    golfCartGroup.add(lamp);
+  });
+
+  // Steering Column & Wheel (Left-Hand Drive)
+  const steerCol = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.55, 8), tireMat);
+  steerCol.position.set(0.32, 0.92, 0.48);
+  steerCol.rotation.x = -0.55;
+  golfCartGroup.add(steerCol);
+
+  cartSteeringWheel = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 8, 16), tireMat);
+  cartSteeringWheel.position.set(0.32, 1.12, 0.34);
+  cartSteeringWheel.rotation.x = Math.PI * 0.32;
+  golfCartGroup.add(cartSteeringWheel);
+
+  // 4 Tires & Gold Rims
+  [[-0.74, 0.85], [0.74, 0.85], [-0.74, -0.82], [0.74, -0.82]].forEach(([wx, wz]) => {
+    const wheelPivot = new THREE.Group();
+    wheelPivot.position.set(wx, 0.28, wz);
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 0.22, 16), tireMat);
+    tire.rotation.z = Math.PI / 2;
+    tire.castShadow = true;
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.23, 12), rimMat);
+    hub.rotation.z = Math.PI / 2;
+    wheelPivot.add(tire, hub);
+    golfCartGroup.add(wheelPivot);
+    cartWheels.push(wheelPivot);
+  });
+
+  // Seated Golfer Driver Character (Visible when driving in 3rd person)
+  cartDriverModel = new THREE.Group();
+  const dTorso = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.48, 0.22), poloMat);
+  dTorso.position.set(0.32, 1.12, -0.22);
+  const dHead = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), skinMat);
+  dHead.position.set(0.32, 1.46, -0.2);
+  const dCap = new THREE.Mesh(new THREE.SphereGeometry(0.126, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
+  dCap.position.set(0.32, 1.47, -0.2);
+  const dArms = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.1, 0.42), skinMat);
+  dArms.position.set(0.32, 1.14, 0.08);
+  cartDriverModel.add(dTorso, dHead, dCap, dArms);
+  cartDriverModel.visible = false;
+  golfCartGroup.add(cartDriverModel);
+
+  golfCartGroup.position.copy(state.cartPos);
+  golfCartGroup.rotation.y = state.cartYaw;
+  scene.add(golfCartGroup);
+
+  // Register Golf Cart in interactables so player can enter it from Walk mode with [E]
+  interactables.push({
+    pos: state.cartPos,
+    radius: 3.6,
+    getPrompt: () => 'Drive Golf Cart (3rd Person) [E]',
+    action: () => enterGolfCart()
+  });
+}
+
+function enterGolfCart() {
+  if (document.pointerLockElement) document.exitPointerLock();
+  state.cartSpeed = 0;
+  state.cartSteer = 0;
+  setMode('cart');
+  showToast('🛺 Driving Golf Cart — WASD/Arrows to drive • [E] or [C] to exit');
+}
+
+function exitGolfCart() {
+  // Step out cleanly on the driver's left side
+  const sideX = Math.cos(state.cartYaw) * 1.65;
+  const sideZ = -Math.sin(state.cartYaw) * 1.65;
+  state.playerPos.set(state.cartPos.x + sideX, 1.78, state.cartPos.z + sideZ);
+  state.playerYaw = state.cartYaw + Math.PI;
+  state.cartSpeed = 0;
+  setMode('walk');
+  showToast('🚶 Exited Golf Cart');
+}
+
+function summonOrToggleCart() {
+  if (state.mode === 'cart') {
+    exitGolfCart();
+    return;
+  }
+  // Park the golf cart neatly beside the player/ball and hop straight into 3rd-person driving
+  const refPos = state.mode === 'swing' ? state.ballPos : state.playerPos;
+  const yaw = state.mode === 'swing' ? state.aimYaw : state.playerYaw + Math.PI;
+  const rightX = -Math.cos(yaw) * 3.2;
+  const rightZ = Math.sin(yaw) * 3.2;
+  state.cartPos.set(refPos.x + rightX, 0, refPos.z + rightZ);
+  state.cartYaw = yaw;
+  golfCartGroup.position.copy(state.cartPos);
+  golfCartGroup.rotation.y = state.cartYaw;
+  enterGolfCart();
+}
+
+function buildClubhouse() {
+  const chGroup = new THREE.Group();
+  scene.add(chGroup);
+
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0xd6d3d1, roughness: 0.85 });
+  const timberMat = new THREE.MeshStandardMaterial({ color: 0x5c3419, roughness: 0.75 });
+  const plasterMat = new THREE.MeshStandardMaterial({ color: 0xfaf6ee, roughness: 0.82 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e3a2f, roughness: 0.65 });
+  const glassMat = new THREE.MeshStandardMaterial({
+    color: 0xbae6fd, transparent: true, opacity: 0.45, roughness: 0.1, metalness: 0.2
+  });
+  const woodFloorMat = new THREE.MeshStandardMaterial({ map: createWoodFloorTexture(), roughness: 0.55 });
+
+  // Stone Pathway connecting 1st Tee (Z=16) to Clubhouse Entrance (Z=38)
+  const pathMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(6.5, 0.08, 22),
+    new THREE.MeshStandardMaterial({ color: 0xa8a29e, roughness: 0.9 })
+  );
+  pathMesh.position.set(0, 0.04, 27);
+  pathMesh.receiveShadow = true;
+  chGroup.add(pathMesh);
+
+  // Main Clubhouse Hardwood Floor & Veranda Deck (X: -24..24, Z: 35..76)
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(48, 0.32, 41), woodFloorMat);
+  floor.position.set(0, 0.16, 55.5);
+  floor.receiveShadow = true;
+  chGroup.add(floor);
+
+  // Veranda Pillars along front porch (Z = 35.5)
+  [-21, -14, -7, 7, 14, 21].forEach(px => {
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.38, 6.2, 12), plasterMat);
+    pillar.position.set(px, 3.3, 35.5);
+    pillar.castShadow = true;
+    chGroup.add(pillar);
+  });
+
+  // Exterior Walls (with 5.2m wide front entrance opening at X = -2.6..2.6, Z = 38)
+  const wallH = 6.2;
+  const addWall = (w, h, d, x, y, z, mat = plasterMat, addCollider = true) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    m.position.set(x, y, z);
+    m.castShadow = true;
+    m.receiveShadow = true;
+    chGroup.add(m);
+    if (addCollider) {
+      colliders.push({
+        minX: x - w * 0.5 - 0.35, maxX: x + w * 0.5 + 0.35,
+        minZ: z - d * 0.5 - 0.35, maxZ: z + d * 0.5 + 0.35
+      });
+    }
+    return m;
+  };
+
+  // Front Wall Left & Right of Double Doors (Z = 38)
+  addWall(21.4, wallH, 0.6, -13.3, 3.3, 38);
+  addWall(21.4, wallH, 0.6, 13.3, 3.3, 38);
+  // Header above front doorway
+  addWall(5.2, 2.0, 0.6, 0, 5.4, 38, timberMat, false);
+
+  // Back Wall (Z = 76) & Side Walls (X = -24, X = +24)
+  addWall(48.6, wallH, 0.6, 0, 3.3, 76);
+  addWall(0.6, wallH, 38.6, -24, 3.3, 57);
+  addWall(0.6, wallH, 38.6, 24, 3.3, 57);
+
+  // Pitched Clubhouse Roof & Timber Beams
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(36, 7.5, 4), roofMat);
+  roof.position.set(0, 10.1, 56);
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.set(1.05, 1, 0.88);
+  chGroup.add(roof);
+
+  // Ceiling + Warm Interior Chandeliers
+  const ceiling = new THREE.Mesh(new THREE.BoxGeometry(47.6, 0.3, 37.6), timberMat);
+  ceiling.position.set(0, 6.45, 57);
+  chGroup.add(ceiling);
+
+  [[-12, 48], [12, 48], [-12, 65], [12, 65], [0, 57]].forEach(([lx, lz]) => {
+    const bulb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.35, 12, 12),
+      new THREE.MeshBasicMaterial({ color: 0xfef08a })
+    );
+    bulb.position.set(lx, 5.9, lz);
+    chGroup.add(bulb);
+  });
+  const interiorLight = new THREE.PointLight(0xffedd5, 1.35, 55);
+  interiorLight.position.set(0, 5.6, 56);
+  chGroup.add(interiorLight);
+
+  // Interactive Front Double Doors (Z = 38)
+  leftDoorPivot = new THREE.Group();
+  leftDoorPivot.position.set(-2.55, 0.32, 38);
+  const leftDoorLeaf = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.9, 0.14), timberMat);
+  leftDoorLeaf.position.set(1.25, 1.95, 0);
+  const leftGlass = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.6, 0.16), glassMat);
+  leftGlass.position.set(1.25, 2.2, 0);
+  leftDoorPivot.add(leftDoorLeaf, leftGlass);
+  chGroup.add(leftDoorPivot);
+
+  rightDoorPivot = new THREE.Group();
+  rightDoorPivot.position.set(2.55, 0.32, 38);
+  const rightDoorLeaf = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.9, 0.14), timberMat);
+  rightDoorLeaf.position.set(-1.25, 1.95, 0);
+  const rightGlass = new THREE.Mesh(new THREE.BoxGeometry(1.7, 2.6, 0.16), glassMat);
+  rightGlass.position.set(-1.25, 2.2, 0);
+  rightDoorPivot.add(rightDoorLeaf, rightGlass);
+  chGroup.add(rightDoorPivot);
+
+  interactables.push({
+    pos: new THREE.Vector3(0, 1.8, 38),
+    radius: 4.5,
+    getPrompt: () => state.doorsOpen ? 'Close Clubhouse Doors [E]' : 'Open Clubhouse Doors [E]',
+    action: () => {
+      state.doorsOpen = !state.doorsOpen;
+      sound.playUiChime();
+    }
+  });
+
+  // STATION 1: PRO SHOP COUNTER & CLUB DISPLAYS (West Wing: X = -16, Z = 47)
+  addWall(7.5, 1.15, 1.8, -16, 0.9, 47, timberMat, true);
+  [-18.5, -16, -13.5].forEach((rx, i) => {
+    const rack = new THREE.Mesh(new THREE.BoxGeometry(0.9, 2.2, 0.6), stoneMat);
+    rack.position.set(rx, 1.4, 43.5);
+    chGroup.add(rack);
+    const clubHead = new THREE.Mesh(
+      new THREE.BoxGeometry(0.35, 0.25, 0.25),
+      new THREE.MeshStandardMaterial({ color: i === 2 ? 0xeab308 : 0x94a3b8, metalness: 0.8 })
+    );
+    clubHead.position.set(rx, 2.65, 43.5);
+    chGroup.add(clubHead);
+  });
+  interactables.push({
+    pos: new THREE.Vector3(-16, 1.8, 49.2),
+    radius: 3.8,
+    getPrompt: () => 'Browse Pro Shop Clubs & Balls [E]',
+    action: () => openClubhouseStation('proshop')
+  });
+
+  // STATION 2: THE 19TH HOLE BAR & LOUNGE STOOLS (East Wing: X = 16, Z = 48)
+  addWall(8.0, 1.2, 2.0, 16, 0.92, 48, timberMat, true);
+  [13.5, 16, 18.5].forEach(sx => {
+    const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.78, 12), stoneMat);
+    stool.position.set(sx, 0.7, 50.2);
+    chGroup.add(stool);
+  });
+  interactables.push({
+    pos: new THREE.Vector3(16, 1.8, 50.5),
+    radius: 3.8,
+    getPrompt: () => 'Order Refreshments at 19th Hole Bar [E]',
+    action: () => openClubhouseStation('bar')
+  });
+
+  // STATION 3: INDOOR PRACTICE PUTTING GREEN (South-West Wing: X = -12, Z = 65)
+  const indoorGreen = new THREE.Mesh(
+    new THREE.BoxGeometry(9.5, 0.14, 13.5),
+    new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.65 })
+  );
+  indoorGreen.position.set(-12, 0.36, 65);
+  chGroup.add(indoorGreen);
+
+  indoorHolePos = new THREE.Vector3(-12, 0.44, 60.5);
+  const indoorCup = new THREE.Mesh(
+    new THREE.CircleGeometry(0.24, 18),
+    new THREE.MeshBasicMaterial({ color: 0x090d0a })
+  );
+  indoorCup.rotation.x = -Math.PI / 2;
+  indoorCup.position.copy(indoorHolePos);
+  chGroup.add(indoorCup);
+
+  indoorPuttingBall = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 14, 14),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 })
+  );
+  indoorPuttingBall.position.set(-12, 0.48, 69.5);
+  chGroup.add(indoorPuttingBall);
+
+  interactables.push({
+    pos: new THREE.Vector3(-12, 1.8, 68.5),
+    radius: 4.2,
+    getPrompt: () => 'Hit Practice Putt on Indoor Green [E]',
+    action: () => triggerIndoorPutt()
+  });
+
+  // STATION 4: TRACKMAN GOLF SIMULATOR BAY (South-East Wing: X = 12, Z = 66)
+  const simCanvas = document.createElement('canvas');
+  simCanvas.width = 512; simCanvas.height = 256;
+  simScreenCtx = simCanvas.getContext('2d');
+  simScreenTex = new THREE.CanvasTexture(simCanvas);
+  drawSimulatorScreen('TRACKMAN SIMULATOR READY', 'Target: 150 Yds Island Green • Press [E]');
+
+  const simScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(7.2, 3.6),
+    new THREE.MeshBasicMaterial({ map: simScreenTex })
+  );
+  simScreen.position.set(12, 2.5, 74.8);
+  simScreen.rotation.y = Math.PI;
+  chGroup.add(simScreen);
+
+  const simMat = new THREE.Mesh(
+    new THREE.BoxGeometry(3.2, 0.1, 2.4),
+    new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.85 })
+  );
+  simMat.position.set(12, 0.35, 69.5);
+  chGroup.add(simMat);
+
+  interactables.push({
+    pos: new THREE.Vector3(12, 1.8, 69.5),
+    radius: 4.2,
+    getPrompt: () => 'Use TrackMan Golf Simulator [E]',
+    action: () => openClubhouseStation('simulator')
+  });
+
+  // STATION 5: GRAND HEARTH FIREPLACE & TROPHY CASE (Center Rear: X = 0, Z = 74)
+  addWall(4.4, 4.2, 1.6, 0, 2.4, 74.8, stoneMat, true);
+  fireplaceFlame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.65, 1.1, 10),
+    new THREE.MeshBasicMaterial({ color: 0xf97316 })
+  );
+  fireplaceFlame.position.set(0, 1.15, 73.85);
+  chGroup.add(fireplaceFlame);
+
+  fireplaceLight = new THREE.PointLight(0xf97316, 1.35, 14);
+  fireplaceLight.position.set(0, 1.5, 73.2);
+  chGroup.add(fireplaceLight);
+
+  const trophyCup = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.32, 0.18, 0.65, 14),
+    new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85, roughness: 0.2 })
+  );
+  trophyCup.position.set(0, 4.95, 74.2);
+  chGroup.add(trophyCup);
+
+  interactables.push({
+    pos: new THREE.Vector3(0, 1.8, 71.5),
+    radius: 4.2,
+    getPrompt: () => 'Inspect Trophy Case & Club Records [E]',
+    action: () => openClubhouseStation('trophy')
+  });
+
+  // --- NEW CLUBHOUSE FURNISHINGS & INTERACTIVE STATIONS ---
+  const leatherMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.62 });
+  const velvetMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, roughness: 0.85 });
+  const goldTrimMat = new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.8, roughness: 0.25 });
+  const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x1e130c, roughness: 0.35 });
+
+  // Central Emerald Lounge Rug
+  const loungeRug = new THREE.Mesh(new THREE.PlaneGeometry(11, 9), velvetMat);
+  loungeRug.rotation.x = -Math.PI / 2;
+  loungeRug.position.set(0, 0.33, 57);
+  chGroup.add(loungeRug);
+
+  // Leather Lounge Sofas & Coffee Table around the Central Rug
+  const addSofa = (sx, sz, rotY) => {
+    const sofa = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.55, 1.15), leatherMat);
+    base.position.y = 0.45;
+    const back = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.85, 0.28), leatherMat);
+    back.position.set(0, 0.95, -0.44);
+    const armL = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 1.15), leatherMat);
+    armL.position.set(-1.56, 0.65, 0);
+    const armR = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.72, 1.15), leatherMat);
+    armR.position.set(1.56, 0.65, 0);
+    sofa.add(base, back, armL, armR);
+    sofa.position.set(sx, 0.16, sz);
+    sofa.rotation.y = rotY;
+    chGroup.add(sofa);
+    colliders.push({ minX: sx - 1.6, maxX: sx + 1.6, minZ: sz - 0.8, maxZ: sz + 0.8 });
+  };
+  addSofa(-4.2, 57, Math.PI / 2);
+  addSofa(4.2, 57, -Math.PI / 2);
+
+  // Central Mahogany Coffee Table
+  const coffeeTable = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 1.3), timberMat);
+  coffeeTable.position.set(0, 0.78, 57);
+  chGroup.add(coffeeTable);
+
+  // Dining Tables & Chairs near the 19th Hole Bar (East Lounge: X = 18.5, Z = 57)
+  [55.5, 60.5].forEach(tz => {
+    const tableTop = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 0.1, 18), timberMat);
+    tableTop.position.set(19.5, 1.12, tz);
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.35, 0.8, 12), stoneMat);
+    ped.position.set(19.5, 0.72, tz);
+    chGroup.add(tableTop, ped);
+    colliders.push({ minX: 18.5, maxX: 20.5, minZ: tz - 1.0, maxZ: tz + 1.0 });
+  });
+
+  // STATION 6: CLUBHOUSE RETRO JUKEBOX (Near Lounge Entrance: X = -6.5, Z = 41.2)
+  const jukebox = new THREE.Group();
+  const jbBody = new THREE.Mesh(new THREE.BoxGeometry(1.35, 1.85, 0.85), timberMat);
+  jbBody.position.y = 1.08;
+  const jbArch = new THREE.Mesh(new THREE.CylinderGeometry(0.67, 0.67, 0.85, 16, 1, false, 0, Math.PI), goldTrimMat);
+  jbArch.rotation.z = Math.PI / 2;
+  jbArch.rotation.y = Math.PI / 2;
+  jbArch.position.y = 2.0;
+  const jbNeon = new THREE.Mesh(
+    new THREE.BoxGeometry(0.95, 0.9, 0.08),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+  );
+  jbNeon.position.set(0, 1.35, 0.42);
+  jukebox.add(jbBody, jbArch, jbNeon);
+  jukebox.position.set(-6.5, 0.16, 40.5);
+  chGroup.add(jukebox);
+  colliders.push({ minX: -7.4, maxX: -5.6, minZ: 39.8, maxZ: 41.3 });
+
+  interactables.push({
+    pos: new THREE.Vector3(-6.5, 1.8, 42.5),
+    radius: 3.4,
+    getPrompt: () => 'Spin Tunes on Clubhouse Jukebox [E]',
+    action: () => openClubhouseStation('jukebox')
+  });
+
+  // STATION 7: GOLDEN TEE ARCADE CABINET (West Wall: X = -21.8, Z = 56.5)
+  const arcade = new THREE.Group();
+  const arcCab = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.35, 1.25), darkWoodMat);
+  arcCab.position.y = 1.33;
+  const arcScreen = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.95, 0.75),
+    new THREE.MeshBasicMaterial({ color: 0x4ade80 })
+  );
+  arcScreen.position.set(0.56, 1.62, 0);
+  arcScreen.rotation.y = Math.PI / 2;
+  const arcMarquee = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.34, 1.15),
+    new THREE.MeshBasicMaterial({ color: 0xfacc15 })
+  );
+  arcMarquee.position.set(0.52, 2.28, 0);
+  arcade.add(arcCab, arcScreen, arcMarquee);
+  arcade.position.set(-22.2, 0.16, 56.5);
+  chGroup.add(arcade);
+  colliders.push({ minX: -23.2, maxX: -21.3, minZ: 55.6, maxZ: 57.4 });
+
+  interactables.push({
+    pos: new THREE.Vector3(-20.2, 1.8, 56.5),
+    radius: 3.5,
+    getPrompt: () => 'Play Retro Arcade Golf Mini-Game [E]',
+    action: () => openClubhouseStation('arcade')
+  });
+
+  // STATION 8: BABY GRAND PIANO (East Entrance Lounge: X = 7.2, Z = 41.5)
+  const piano = new THREE.Group();
+  const pianoBody = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.42, 1.65), darkWoodMat);
+  pianoBody.position.y = 1.12;
+  const pianoKeys = new THREE.Mesh(
+    new THREE.BoxGeometry(1.85, 0.1, 0.32),
+    new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 })
+  );
+  pianoKeys.position.set(0, 1.02, 0.88);
+  [[-0.85, -0.65], [0.85, -0.65], [-0.85, 0.65], [0.85, 0.65]].forEach(([lx, lz]) => {
+    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.92, 8), darkWoodMat);
+    leg.position.set(lx, 0.46, lz);
+    piano.add(leg);
+  });
+  piano.add(pianoBody, pianoKeys);
+  piano.position.set(7.5, 0.16, 41.2);
+  chGroup.add(piano);
+  colliders.push({ minX: 6.2, maxX: 8.8, minZ: 40.0, maxZ: 42.5 });
+
+  interactables.push({
+    pos: new THREE.Vector3(7.5, 1.8, 43.2),
+    radius: 3.4,
+    getPrompt: () => 'Play Grand Piano Chord [E]',
+    action: () => {
+      sound.init();
+      sound.playCupRattle();
+      showToast('🎹 Played a championship grand piano flourish!');
+    }
+  });
+
+  // STATION 9: CHAMPIONS TOUR LEADERBOARD BOARD (East Wall: X = 23.4, Z = 66)
+  const lbBoard = new THREE.Mesh(
+    new THREE.BoxGeometry(0.18, 2.5, 3.8),
+    new THREE.MeshStandardMaterial({ color: 0x064e3b, roughness: 0.45 })
+  );
+  lbBoard.position.set(23.5, 2.35, 65.5);
+  const lbFrame = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.7, 4.0), goldTrimMat);
+  lbFrame.position.set(23.55, 2.35, 65.5);
+  chGroup.add(lbFrame, lbBoard);
+
+  interactables.push({
+    pos: new THREE.Vector3(21.2, 1.8, 65.5),
+    radius: 3.6,
+    getPrompt: () => 'View Clubhouse Tour Leaderboard [E]',
+    action: () => openClubhouseStation('leaderboard')
+  });
+}
+
+function drawSimulatorScreen(headline, subline) {
+  if (!simScreenCtx || !simScreenTex) return;
+  const ctx = simScreenCtx;
+  const grad = ctx.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#0f291e');
+  grad.addColorStop(0.58, '#15803d');
+  grad.addColorStop(1, '#0284c7');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 512, 256);
+
+  // Island green & pin illustration
+  ctx.fillStyle = '#4ade80';
+  ctx.beginPath();
+  ctx.ellipse(256, 178, 92, 26, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(256, 178);
+  ctx.lineTo(256, 128);
+  ctx.stroke();
+
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(256, 128, 22, 13);
+
+  // Top telemetry banner
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillRect(16, 14, 480, 74);
+
+  ctx.fillStyle = '#facc15';
+  ctx.font = 'bold 24px Inter, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(headline, 256, 46);
+
+  ctx.fillStyle = '#e2e8f0';
+  ctx.font = '16px Inter, sans-serif';
+  ctx.fillText(subline, 256, 74);
+
+  simScreenTex.needsUpdate = true;
+}
+
+// ----------------------------------------------------------------------------
+// 9. GOLF BALL, AIMING ARC & THIRD-PERSON ARTICULATED GOLFER CHARACTER MODEL
+// ----------------------------------------------------------------------------
+const ballMat = new THREE.MeshStandardMaterial({
+  color: 0xffffff, roughness: 0.25, metalness: 0.05
+});
+const golfBallMesh = new THREE.Mesh(new THREE.SphereGeometry(0.14, 18, 18), ballMat);
+golfBallMesh.castShadow = true;
+scene.add(golfBallMesh);
+
+// Subtle address target ring around the ball on the lower-left third of the screen
+const addressRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.24, 0.34, 24),
+  new THREE.MeshBasicMaterial({ color: 0x4ade80, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
+);
+addressRing.rotation.x = -Math.PI / 2;
+scene.add(addressRing);
+
+// Glowing vertical beacon ring when ball is far away so player never loses it
+const ballBeacon = new THREE.Mesh(
+  new THREE.RingGeometry(0.35, 0.55, 24),
+  new THREE.MeshBasicMaterial({ color: 0xfacc15, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
+);
+ballBeacon.rotation.x = -Math.PI / 2;
+scene.add(ballBeacon);
+
+// Ball Flight Trail Line
+const trailMaxPts = 90;
+const trailGeo = new THREE.BufferGeometry();
+const trailPositions = new Float32Array(trailMaxPts * 3);
+trailGeo.setAttribute('position', new THREE.BufferAttribute(trailPositions, 3));
+const trailMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 });
+const ballTrailLine = new THREE.Line(trailGeo, trailMat);
+scene.add(ballTrailLine);
+
+// Aiming Preview Line (Trajectory arc in Swing Mode)
+const aimLinePts = 36;
+const aimGeo = new THREE.BufferGeometry();
+aimGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(aimLinePts * 3), 3));
+const aimMat = new THREE.LineDashedMaterial({ color: 0xfacc15, dashSize: 1.5, gapSize: 0.9 });
+const aimLine = new THREE.Line(aimGeo, aimMat);
+scene.add(aimLine);
+
+// Articulated Third-Person 3D Golfer Character Model (Visible in Third-Person Swing Mode)
+const golferGroup = new THREE.Group();
+const clubShaftMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.85, roughness: 0.2 });
+const clubHeadMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.75, roughness: 0.25 });
+const clubGripMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+
+const skinMat = new THREE.MeshStandardMaterial({ color: 0xf1c27d, roughness: 0.65 });
+const poloMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7 }); // Emerald Pines polo
+const slacksMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.75 }); // Tour white trousers
+const shoeMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+const capMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.6 }); // Championship gold cap
+
+// Lower Body (Hips + Legs + Golf Shoes)
+const golferHips = new THREE.Group();
+golferHips.position.set(0, 0.92, 0);
+golferGroup.add(golferHips);
+
+const pelvis = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.18, 0.22), slacksMat);
+pelvis.castShadow = true;
+golferHips.add(pelvis);
+
+[-0.11, 0.11].forEach(lx => {
+  const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.06, 0.86, 10), slacksMat);
+  leg.position.set(lx, -0.45, 0);
+  leg.castShadow = true;
+  golferHips.add(leg);
+
+  const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.22), shoeMat);
+  shoe.position.set(lx, -0.88, 0.04);
+  shoe.castShadow = true;
+  golferHips.add(shoe);
+});
+
+// Upper Torso Pivot (Rotates during backswing, downswing & follow-through)
+const golferTorso = new THREE.Group();
+golferTorso.position.set(0, 0.08, 0);
+golferTorso.rotation.x = 0.28; // Athletic golf spine tilt over the ball
+golferHips.add(golferTorso);
+
+const chest = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.54, 0.24), poloMat);
+chest.position.set(0, 0.28, 0);
+chest.castShadow = true;
+golferTorso.add(chest);
+
+// Head & Golf Visor/Cap
+const golferHead = new THREE.Group();
+golferHead.position.set(0, 0.66, 0.03);
+golferHead.rotation.x = -0.15; // Eyes focused down on the golf ball
+const headSphere = new THREE.Mesh(new THREE.SphereGeometry(0.125, 14, 14), skinMat);
+headSphere.castShadow = true;
+golferHead.add(headSphere);
+const capCrown = new THREE.Mesh(new THREE.SphereGeometry(0.132, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), capMat);
+golferHead.add(capCrown);
+const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.02, 0.14), capMat);
+capBrim.position.set(0, 0.03, 0.13);
+golferHead.add(capBrim);
+golferTorso.add(golferHead);
+
+// Arms & Golf Club Swing Pivot
+const golferSwingPivot = new THREE.Group();
+golferSwingPivot.position.set(0, 0.48, 0.11);
+golferTorso.add(golferSwingPivot);
+
+const leftArm = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.04, 0.56, 8), skinMat);
+leftArm.position.set(-0.14, -0.24, 0.12);
+leftArm.rotation.set(-0.35, 0, -0.24);
+leftArm.castShadow = true;
+
+const rightArm = new THREE.Mesh(new THREE.CylinderGeometry(0.048, 0.04, 0.56, 8), skinMat);
+rightArm.position.set(0.14, -0.24, 0.12);
+rightArm.rotation.set(-0.35, 0, 0.24);
+rightArm.castShadow = true;
+
+golferSwingPivot.add(leftArm, rightArm);
+
+// Golf Club held in Golfer's Hands
+const tpClubGroup = new THREE.Group();
+tpClubGroup.position.set(0, -0.46, 0.22);
+tpClubGroup.rotation.x = -0.32;
+
+const tpGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.018, 0.28, 8), clubGripMat);
+tpGrip.position.set(0, -0.12, 0);
+const tpShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.01, 0.96, 8), clubShaftMat);
+tpShaft.position.set(0, -0.6, 0);
+const tpHead = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.065, 0.085), clubHeadMat);
+tpHead.position.set(0.04, -1.08, 0.02);
+tpHead.castShadow = true;
+
+tpClubGroup.add(tpGrip, tpShaft, tpHead);
+golferSwingPivot.add(tpClubGroup);
+
+golferGroup.visible = false;
+scene.add(golferGroup);
+
+function updateClubAppearance() {
+  const club = BASE_CLUBS[state.selectedClubIdx];
+  const set = CLUB_SETS[state.equippedSet];
+  clubHeadMat.color.setHex(set.headColor);
+  clubShaftMat.color.setHex(set.shaftColor);
+
+  if (club.type === 'driver') {
+    tpHead.scale.set(1.35, 1.25, 1.45);
+    tpShaft.scale.y = 1.08;
+  } else if (club.type === 'putter') {
+    tpHead.scale.set(1.3, 0.65, 0.75);
+    tpShaft.scale.y = 0.88;
+  } else {
+    tpHead.scale.set(1.0, 0.95, 0.65);
+    tpShaft.scale.y = 0.98;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 10. SURFACE DETECTION & TERRAIN QUERIES
+// ----------------------------------------------------------------------------
+function getSurfaceAt(x, z) {
+  // Check Clubhouse interior/veranda
+  if (x >= -28 && x <= 28 && z >= 34 && z <= 80) {
+    return 'clubhouse';
+  }
+
+  for (let i = 0; i < HOLES_DATA.length; i++) {
+    const h = HOLES_DATA[i];
+    // Green check
+    const dg = Math.hypot(x - h.pin.x, z - h.pin.z);
+    if (dg <= h.greenRadius) return 'green';
+    if (dg <= h.greenRadius + 2.2) return 'fairway';
+
+    // Tee box check
+    if (Math.abs(x - h.tee.x) <= 5.2 && Math.abs(z - h.tee.z) <= 6.2) return 'tee';
+
+    // Water check
+    for (const w of h.waters) {
+      const nx = (x - w.x) / w.rx;
+      const nz = (z - w.z) / w.rz;
+      if (nx * nx + nz * nz <= 1.0) return 'water';
+    }
+
+    // Bunker check
+    for (const b of h.bunkers) {
+      const nx = (x - b.x) / b.rx;
+      const nz = (z - b.z) / b.rz;
+      if (nx * nx + nz * nz <= 1.0) return 'bunker';
+    }
+
+    // Fairway strip check
+    for (const fw of h.fairways) {
+      const dx = x - fw.x;
+      const dz = z - fw.z;
+      const cos = Math.cos(-fw.rot);
+      const sin = Math.sin(-fw.rot);
+      const lx = dx * cos - dz * sin;
+      const lz = dx * sin + dz * cos;
+      if (Math.abs(lx) <= fw.w * 0.5 && Math.abs(lz) <= fw.l * 0.5) return 'fairway';
+    }
+  }
+  return 'rough';
+}
+
+function getLieLabel(surface) {
+  const map = {
+    tee: 'Tee Box',
+    fairway: 'Fairway',
+    green: 'Putting Green',
+    bunker: 'Sand Bunker',
+    water: 'Water Hazard',
+    clubhouse: 'Clubhouse',
+    rough: 'Rough'
+  };
+  return map[surface] || 'Rough';
+}
+
+// ----------------------------------------------------------------------------
+// 11. HOLE MANAGEMENT, SCORING & MODE SWITCHING
+// ----------------------------------------------------------------------------
+function loadHole(holeIdx, spawnAtTee = true) {
+  state.currentHoleIdx = holeIdx;
+  const hole = HOLES_DATA[holeIdx];
+
+  // Randomize gentle course wind per hole
+  state.windSpeed = 4 + Math.floor(Math.random() * 9);
+  state.windAngle = Math.random() * Math.PI * 2;
+
+  // Place ball on tee
+  state.ballPos.set(hole.tee.x, 0.14, hole.tee.z);
+  state.lastSafeBallPos.copy(state.ballPos);
+  state.ballVel.set(0, 0, 0);
+  state.ballInFlight = false;
+  state.ballAtRest = true;
+  state.ballTrailPoints = [];
+  updateTrailGeometry();
+
+  // Default aim straight at the pin
+  state.aimYaw = Math.atan2(hole.pin.x - hole.tee.x, hole.pin.z - hole.tee.z);
+  autoSelectClub();
+
+  if (spawnAtTee) {
+    // Position player slightly behind the tee box looking down the fairway
+    const backX = Math.sin(state.aimYaw) * 4.5;
+    const backZ = Math.cos(state.aimYaw) * 4.5;
+    state.playerPos.set(hole.tee.x - backX, 1.78, hole.tee.z - backZ);
+    state.playerYaw = Math.atan2(-(hole.pin.x - hole.tee.x), -(hole.pin.z - hole.tee.z));
+    state.playerPitch = -0.04;
+    setMode('swing');
+  }
+
+  updateHUD();
+}
+
+function autoSelectClub() {
+  const hole = HOLES_DATA[state.currentHoleIdx];
+  const distYds = Math.hypot(hole.pin.x - state.ballPos.x, hole.pin.z - state.ballPos.z);
+  const surface = getSurfaceAt(state.ballPos.x, state.ballPos.z);
+
+  if (surface === 'green' || distYds < 24) {
+    state.selectedClubIdx = 5; // Putter
+  } else if (surface === 'bunker') {
+    state.selectedClubIdx = 4; // Sand Wedge
+  } else if (distYds > 215 && surface === 'tee') {
+    state.selectedClubIdx = 0; // Driver
+  } else if (distYds > 175) {
+    state.selectedClubIdx = 1; // 5-Iron
+  } else if (distYds > 135) {
+    state.selectedClubIdx = 2; // 7-Iron
+  } else if (distYds > 85) {
+    state.selectedClubIdx = 3; // PW
+  } else {
+    state.selectedClubIdx = 4; // SW
+  }
+  renderClubSelector();
+  updateClubAppearance();
+}
+
+function setMode(newMode) {
+  if (newMode === 'swing' && !state.ballAtRest) {
+    showToast('⏳ Wait for your ball to stop rolling!');
+    return;
+  }
+  state.mode = newMode;
+  state.isChargingSwing = false;
+  state.swingPower = 0;
+
+  const swingHud = document.getElementById('swing-hud');
+  const walkHud = document.getElementById('walk-hud');
+  const crosshair = document.getElementById('crosshair');
+  const modeLabel = document.getElementById('mode-btn-label');
+  const cartLabel = document.getElementById('cart-btn-label');
+  if (cartLabel) cartLabel.textContent = newMode === 'cart' ? 'Exit Cart [E]' : 'Cart [C]';
+  if (cartDriverModel) cartDriverModel.visible = newMode === 'cart';
+
+  if (newMode === 'swing') {
+    if (document.pointerLockElement) document.exitPointerLock();
+    swingHud.classList.remove('hidden');
+    walkHud.classList.add('hidden');
+    crosshair.classList.add('hidden');
+    golferGroup.visible = true;
+    addressRing.visible = true;
+    aimLine.visible = state.showAimLine;
+    modeLabel.textContent = 'First-Person Walk [F]';
+    autoSelectClub();
+  } else if (newMode === 'walk') {
+    swingHud.classList.add('hidden');
+    walkHud.classList.remove('hidden');
+    crosshair.classList.remove('hidden');
+    golferGroup.visible = false;
+    addressRing.visible = false;
+    aimLine.visible = false;
+    modeLabel.textContent = 'Address Ball [F]';
+  } else if (newMode === 'cart') {
+    if (document.pointerLockElement) document.exitPointerLock();
+    swingHud.classList.add('hidden');
+    walkHud.classList.remove('hidden');
+    crosshair.classList.add('hidden');
+    golferGroup.visible = false;
+    addressRing.visible = false;
+    aimLine.visible = false;
+    modeLabel.textContent = 'Address Ball [F]';
+  } else if (newMode === 'flyover') {
+    if (document.pointerLockElement) document.exitPointerLock();
+    swingHud.classList.add('hidden');
+    walkHud.classList.add('hidden');
+    crosshair.classList.add('hidden');
+    golferGroup.visible = false;
+    addressRing.visible = false;
+    aimLine.visible = false;
+    modeLabel.textContent = 'Exit Map [M]';
+    showToast('🗺️ Tactical Hole Flyover — Press [M] to return');
+  }
+}
+
+function teleportToBall() {
+  const hole = HOLES_DATA[state.currentHoleIdx];
+  const dirToPin = Math.atan2(hole.pin.x - state.ballPos.x, hole.pin.z - state.ballPos.z);
+  state.playerPos.set(
+    state.ballPos.x - Math.sin(dirToPin) * 3.2,
+    1.78,
+    state.ballPos.z - Math.cos(dirToPin) * 3.2
+  );
+  state.playerYaw = Math.atan2(-(hole.pin.x - state.ballPos.x), -(hole.pin.z - state.ballPos.z));
+  state.aimYaw = dirToPin;
+  setMode('swing');
+  showToast('🏌️ Addressing ball in third-person view');
+}
+
+function teleportToClubhouse() {
+  state.doorsOpen = true;
+  state.playerPos.set(0, 1.78, 43);
+  state.playerYaw = Math.PI; // Facing South into the grand lobby
+  state.playerPitch = -0.02;
+  setMode('walk');
+  closeAllModals();
+  showToast('🏛️ Welcome inside Emerald Pines Clubhouse!');
+}
+
+// ----------------------------------------------------------------------------
+// 12. SWING EXECUTION & REALISTIC BALL PHYSICS
+// ----------------------------------------------------------------------------
+function startChargingSwing() {
+  if (state.mode !== 'swing' || !state.ballAtRest || state.swingAnimating) return;
+  sound.init();
+  state.isChargingSwing = true;
+  state.swingPower = 0.05;
+  state.swingDir = 1;
+  document.getElementById('swing-status-text').textContent = 'Release at Sweet Spot!';
+}
+
+function releaseSwing() {
+  if (!state.isChargingSwing) return;
+  state.isChargingSwing = false;
+
+  const club = BASE_CLUBS[state.selectedClubIdx];
+  const set = CLUB_SETS[state.equippedSet];
+  const power = Math.max(0.08, state.swingPower);
+
+  // Accuracy dispersion based on over-swinging (>0.92) & equipment/buffs
+  let dispersion = Math.max(0, (power - 0.86) * 0.14);
+  const totalAccBonus = set.accuracyBonus + (state.activeBuff?.accuracyBonus || 0);
+  dispersion *= Math.max(0.15, 1 - totalAccBonus);
+  const shotAngle = state.aimYaw + (Math.random() - 0.5) * dispersion;
+
+  // Surface lie penalty
+  const surface = getSurfaceAt(state.ballPos.x, state.ballPos.z);
+  let lieMult = 1.0;
+  if (surface === 'rough') lieMult = club.putter ? 0.55 : 0.84;
+  if (surface === 'bunker') lieMult = club.id === 'sw' ? 0.92 : club.putter ? 0.35 : 0.62;
+
+  const powerMult = set.powerMult + (state.activeBuff?.powerBonus || 0);
+  const targetYds = club.maxYds * power * lieMult * powerMult;
+
+  // Convert target carry yards into initial velocity components
+  const loftRad = THREE.MathUtils.degToRad(club.loftDeg);
+  let speed, vx, vy, vz;
+
+  if (club.putter) {
+    // Ground roll velocity
+    speed = Math.sqrt(2 * 3.6 * targetYds);
+    vx = Math.sin(shotAngle) * speed;
+    vy = 0;
+    vz = Math.cos(shotAngle) * speed;
+  } else {
+    // Ballistic launch with air drag compensation
+    const g = 9.81;
+    const sin2 = Math.max(0.25, Math.sin(2 * loftRad));
+    speed = Math.sqrt((targetYds * g) / sin2) * 1.14;
+    const horiz = speed * Math.cos(loftRad);
+    vx = Math.sin(shotAngle) * horiz;
+    vy = speed * Math.sin(loftRad);
+    vz = Math.cos(shotAngle) * horiz;
+  }
+
+  state.pendingShotData = { vx, vy, vz, club, power };
+  state.swingAnimating = true;
+  state.swingAnimProgress = 0;
+  document.getElementById('swing-status-text').textContent = 'Swinging...';
+}
+
+function executePendingShot() {
+  const shot = state.pendingShotData;
+  if (!shot) return;
+  state.pendingShotData = null;
+
+  state.lastSafeBallPos.copy(state.ballPos);
+  state.ballVel.set(shot.vx, shot.vy, shot.vz);
+  state.ballSpin = shot.club.spin * shot.power;
+  state.ballInFlight = !shot.club.putter;
+  state.ballAtRest = false;
+  state.ballTrailPoints = [state.ballPos.clone()];
+
+  // Record stroke
+  state.strokes[state.currentHoleIdx]++;
+  sound.playClubHit(shot.club.type, shot.power);
+
+  // Switch to watch/follow ball cleanly
+  aimLine.visible = false;
+  document.getElementById('swing-status-text').textContent = 'Ball in play...';
+  updateHUD();
+}
+
+function updateBallPhysics(dt) {
+  if (state.ballAtRest) return;
+
+  const hole = HOLES_DATA[state.currentHoleIdx];
+  const g = 9.81;
+  const subSteps = 4;
+  const stepDt = dt / subSteps;
+
+  for (let s = 0; s < subSteps; s++) {
+    const isAirborne = state.ballPos.y > 0.145 || state.ballVel.y > 0.05;
+
+    if (isAirborne) {
+      // Gravity
+      state.ballVel.y -= g * stepDt;
+
+      // Air drag + wind drift
+      const drag = 0.095;
+      state.ballVel.x -= state.ballVel.x * drag * stepDt;
+      state.ballVel.z -= state.ballVel.z * drag * stepDt;
+
+      const windForce = state.windSpeed * 0.042;
+      state.ballVel.x += Math.sin(state.windAngle) * windForce * stepDt;
+      state.ballVel.z += Math.cos(state.windAngle) * windForce * stepDt;
+
+      state.ballPos.addScaledVector(state.ballVel, stepDt);
+
+      // Ground impact
+      if (state.ballPos.y <= 0.14) {
+        state.ballPos.y = 0.14;
+        const surface = getSurfaceAt(state.ballPos.x, state.ballPos.z);
+
+        if (surface === 'water') {
+          sound.playWaterSplash();
+          showToast('💦 Splash! Water Hazard (+1 Penalty Stroke)');
+          state.strokes[state.currentHoleIdx]++;
+          state.ballPos.copy(state.lastSafeBallPos);
+          state.ballVel.set(0, 0, 0);
+          state.ballAtRest = true;
+          state.ballInFlight = false;
+          onBallStopped();
+          return;
+        }
+
+        if (surface === 'bunker') {
+          sound.playSandThud();
+          state.ballVel.x *= 0.22;
+          state.ballVel.z *= 0.22;
+          state.ballVel.y = 0;
+        } else {
+          // Bounce restitution + backspin check
+          const bounceRest = surface === 'green' ? 0.34 : 0.42;
+          const spinCheck = Math.max(0.45, 1 - state.ballSpin * 0.48);
+          state.ballVel.x *= spinCheck;
+          state.ballVel.z *= spinCheck;
+          state.ballSpin *= 0.3;
+
+          if (Math.abs(state.ballVel.y) > 1.35) {
+            state.ballVel.y = Math.abs(state.ballVel.y) * bounceRest;
+          } else {
+            state.ballVel.y = 0;
+            state.ballInFlight = false;
+          }
+        }
+      }
+    } else {
+      // Ground Rolling Physics
+      state.ballPos.y = 0.14;
+      const surface = getSurfaceAt(state.ballPos.x, state.ballPos.z);
+
+      if (surface === 'water') {
+        sound.playWaterSplash();
+        showToast('💦 Rolled into Water Hazard! (+1 Penalty Stroke)');
+        state.strokes[state.currentHoleIdx]++;
+        state.ballPos.copy(state.lastSafeBallPos);
+        state.ballVel.set(0, 0, 0);
+        state.ballAtRest = true;
+        onBallStopped();
+        return;
+      }
+
+      // Surface rolling friction
+      const frictionMap = {
+        green: 1.75,
+        fairway: 3.1,
+        tee: 3.0,
+        rough: 5.8,
+        bunker: 11.5,
+        clubhouse: 4.5
+      };
+      const friction = frictionMap[surface] || 4.0;
+      const speed = Math.hypot(state.ballVel.x, state.ballVel.z);
+
+      // Check Cup Capture!
+      const distToCup = Math.hypot(state.ballPos.x - hole.pin.x, state.ballPos.z - hole.pin.z);
+      if (distToCup <= 0.42 && speed < 8.8) {
+        state.ballPos.set(hole.pin.x, 0.05, hole.pin.z);
+        state.ballVel.set(0, 0, 0);
+        state.ballAtRest = true;
+        state.ballInFlight = false;
+        sound.playCupRattle();
+        handleHoleCompleted();
+        return;
+      }
+
+      if (speed <= 0.14) {
+        state.ballVel.set(0, 0, 0);
+        state.ballAtRest = true;
+        state.ballInFlight = false;
+        onBallStopped();
+        return;
+      }
+
+      const newSpeed = Math.max(0, speed - friction * stepDt);
+      const ratio = newSpeed / speed;
+      state.ballVel.x *= ratio;
+      state.ballVel.z *= ratio;
+      state.ballPos.x += state.ballVel.x * stepDt;
+      state.ballPos.z += state.ballVel.z * stepDt;
+    }
+  }
+
+  // Append trail point
+  if (state.ballTrailPoints.length === 0 ||
+      state.ballPos.distanceTo(state.ballTrailPoints[state.ballTrailPoints.length - 1]) > 0.8) {
+    state.ballTrailPoints.push(state.ballPos.clone());
+    if (state.ballTrailPoints.length > trailMaxPts) state.ballTrailPoints.shift();
+    updateTrailGeometry();
+  }
+}
+
+function onBallStopped() {
+  const hole = HOLES_DATA[state.currentHoleIdx];
+  state.aimYaw = Math.atan2(hole.pin.x - state.ballPos.x, hole.pin.z - state.ballPos.z);
+
+  // Automatically spawn/place player right at the ball's landing spot ready for the next shot
+  state.playerPos.set(
+    state.ballPos.x - Math.sin(state.aimYaw) * 2.8,
+    1.78,
+    state.ballPos.z - Math.cos(state.aimYaw) * 2.8
+  );
+  state.playerYaw = Math.atan2(-(hole.pin.x - state.ballPos.x), -(hole.pin.z - state.ballPos.z));
+
+  if (state.mode !== 'swing') {
+    setMode('swing');
+  } else {
+    autoSelectClub();
+    aimLine.visible = state.showAimLine;
+  }
+
+  const distYds = Math.round(Math.hypot(hole.pin.x - state.ballPos.x, hole.pin.z - state.ballPos.z));
+  const surface = getSurfaceAt(state.ballPos.x, state.ballPos.z);
+  document.getElementById('swing-status-text').textContent = 'Hold [SPACE] or Hold Click to Swing';
+  showToast(`📍 Ball landed on ${getLieLabel(surface)} • ${distYds} yds to pin`);
+  updateHUD();
+}
+
+function handleHoleCompleted() {
+  const idx = state.currentHoleIdx;
+  const hole = HOLES_DATA[idx];
+  const strokes = state.strokes[idx];
+  state.holeCompleted[idx] = true;
+
+  const diff = strokes - hole.par;
+  let title = 'PAR';
+  let emoji = '⛳';
+  if (strokes === 1) { title = 'HOLE IN ONE!!'; emoji = '👑'; }
+  else if (diff <= -3) { title = 'ALBATROSS!'; emoji = '🦅'; }
+  else if (diff === -2) { title = 'EAGLE!'; emoji = '🦅'; }
+  else if (diff === -1) { title = 'BIRDIE!'; emoji = '🐦'; }
+  else if (diff === 0) { title = 'PAR'; emoji = '⛳'; }
+  else if (diff === 1) { title = 'BOGEY'; emoji = '🏌️'; }
+  else { title = `+${diff} OVER PAR`; emoji = '😅'; }
+
+  const totalScoreStr = getFormattedTotalScore();
+
+  // Check if all holes in current round (9 or 18) are completed
+  const activeCompleted = state.holeCompleted.slice(0, state.totalHoles);
+  if (activeCompleted.every(Boolean)) {
+    const totalStrokes = state.strokes.slice(0, state.totalHoles).reduce((a, b) => a + b, 0);
+    if (state.bestRoundScore === null || totalStrokes < state.bestRoundScore) {
+      state.bestRoundScore = totalStrokes;
+    }
+  }
+
+  document.getElementById('hc-emoji').textContent = emoji;
+  document.getElementById('hc-hole-subtitle').textContent = `Hole ${hole.num} of ${state.totalHoles} • ${hole.name}`;
+  document.getElementById('hc-result-title').textContent = title;
+  document.getElementById('hc-result-desc').textContent = `Sunk in ${strokes} stroke${strokes === 1 ? '' : 's'} on a Par ${hole.par}`;
+  document.getElementById('hc-par').textContent = hole.par;
+  document.getElementById('hc-strokes').textContent = strokes;
+  document.getElementById('hc-total').textContent = totalScoreStr;
+
+  const nextBtn = document.getElementById('btn-next-hole');
+  nextBtn.textContent = idx < state.totalHoles - 1 ? `Hole ${idx + 2} ▶` : `🏆 Finish ${state.totalHoles}-Hole Round`;
+  document.getElementById('hole-complete-modal').classList.remove('hidden');
+  updateHUD();
+}
+
+// ----------------------------------------------------------------------------
+// 13. AIMING LINE & TRAIL GEOMETRY UPDATES
+// ----------------------------------------------------------------------------
+function updateTrailGeometry() {
+  const posAttr = trailGeo.getAttribute('position');
+  const pts = state.ballTrailPoints;
+  for (let i = 0; i < trailMaxPts; i++) {
+    const p = pts[i] || pts[pts.length - 1] || state.ballPos;
+    posAttr.setXYZ(i, p.x, p.y + 0.05, p.z);
+  }
+  posAttr.needsUpdate = true;
+}
+
+function updateAimPreviewLine() {
+  if (!aimLine.visible || state.mode !== 'swing' || !state.ballAtRest) return;
+  const club = BASE_CLUBS[state.selectedClubIdx];
+  const set = CLUB_SETS[state.equippedSet];
+  const power = state.isChargingSwing ? Math.max(0.15, state.swingPower) : 0.85;
+  const maxDist = club.maxYds * power * (set.powerMult + (state.activeBuff?.powerBonus || 0));
+
+  const posAttr = aimGeo.getAttribute('position');
+  for (let i = 0; i < aimLinePts; i++) {
+    const t = i / (aimLinePts - 1);
+    const dist = t * maxDist;
+    const x = state.ballPos.x + Math.sin(state.aimYaw) * dist;
+    const z = state.ballPos.z + Math.cos(state.aimYaw) * dist;
+    const apex = club.putter ? 0.12 : Math.sin(t * Math.PI) * (maxDist * Math.tan(THREE.MathUtils.degToRad(club.loftDeg)) * 0.35);
+    posAttr.setXYZ(i, x, Math.max(0.18, apex), z);
+  }
+  posAttr.needsUpdate = true;
+  aimLine.computeLineDistances();
+}
+
+// ----------------------------------------------------------------------------
+// 14. CLUBHOUSE INTERACTIVE STATIONS & MINI-ACTIVITIES
+// ----------------------------------------------------------------------------
+function openClubhouseStation(station) {
+  if (document.pointerLockElement) document.exitPointerLock();
+  const modal = document.getElementById('clubhouse-modal');
+  const icon = document.getElementById('ch-modal-icon');
+  const title = document.getElementById('ch-modal-title');
+  const subtitle = document.getElementById('ch-modal-subtitle');
+  const content = document.getElementById('ch-modal-content');
+
+  if (station === 'proshop') {
+    icon.textContent = '🏌️‍♂️';
+    title.textContent = 'Emerald Pines Pro Shop';
+    subtitle.textContent = 'Complimentary Member Club Fittings & Custom Tour Balls';
+
+    let html = `<div class="text-xs uppercase tracking-wider text-amber-300 font-bold mb-1">Select Golf Club Set</div><div class="grid grid-cols-1 gap-2 mb-4">`;
+    Object.entries(CLUB_SETS).forEach(([key, set]) => {
+      const active = state.equippedSet === key;
+      html += `
+        <button onclick="equipClubSet('${key}')" class="p-3 rounded-xl border text-left flex items-center justify-between transition ${active ? 'bg-emerald-600/35 border-emerald-400 text-white' : 'bg-black/40 border-white/10 text-slate-300 hover:bg-white/10'}">
+          <div>
+            <div class="font-bold text-sm">${set.name}</div>
+            <div class="text-xs text-slate-300">Distance: +${Math.round((set.powerMult - 1) * 100)}% • Accuracy: +${Math.round(set.accuracyBonus * 100)}%</div>
+          </div>
+          <span class="text-xs font-extrabold px-2.5 py-1 rounded-lg ${active ? 'bg-emerald-400 text-slate-950' : 'bg-white/10'}">${active ? 'EQUIPPED' : 'EQUIP'}</span>
+        </button>`;
+    });
+    html += `</div><div class="text-xs uppercase tracking-wider text-amber-300 font-bold mb-1">Select Golf Ball Finish</div><div class="grid grid-cols-2 gap-2">`;
+    Object.entries(BALL_STYLES).forEach(([key, b]) => {
+      const active = state.equippedBall === key;
+      html += `
+        <button onclick="equipBallStyle('${key}')" class="p-2.5 rounded-xl border text-left flex items-center justify-between ${active ? 'bg-amber-500/25 border-amber-400 text-white' : 'bg-black/40 border-white/10 text-slate-300 hover:bg-white/10'}">
+          <span class="font-bold text-xs">${b.name}</span>
+          <span class="text-[10px] font-extrabold px-2 py-0.5 rounded ${active ? 'bg-amber-400 text-slate-950' : 'bg-white/10'}">${active ? '✓' : 'USE'}</span>
+        </button>`;
+    });
+    html += `</div>`;
+    content.innerHTML = html;
+  } else if (station === 'bar') {
+    icon.textContent = '🍹';
+    title.textContent = 'The 19th Hole Bar & Grill';
+    subtitle.textContent = 'Order refreshments for on-course performance buffs';
+
+    const menu = [
+      { id: 'palmer', name: 'Signature Arnold Palmer', icon: '🧊', desc: 'Refreshing iced tea & lemonade. Grants +25% Shot Accuracy.', buff: { name: 'Steady Hands', icon: '🧊', accuracyBonus: 0.25, powerBonus: 0 } },
+      { id: 'espresso', name: 'Double Clubhouse Espresso', icon: '☕', desc: 'Crisp energy boost. Grants +5% Drive Distance & +15% Accuracy.', buff: { name: 'Eagle Focus', icon: '☕', accuracyBonus: 0.15, powerBonus: 0.05 } },
+      { id: 'burger', name: 'Champion Wagyu Clubhouse Burger', icon: '🍔', desc: 'Hearty fuel for par 5s. Grants +8% Swing Power!', buff: { name: 'Power Drive', icon: '🍔', accuracyBonus: 0.05, powerBonus: 0.08 } }
+    ];
+    content.innerHTML = menu.map(item => `
+      <div class="p-3.5 rounded-xl bg-black/40 border border-white/10 flex items-center justify-between gap-3">
+        <div>
+          <div class="font-bold text-white flex items-center gap-1.5"><span>${item.icon}</span> ${item.name}</div>
+          <div class="text-xs text-slate-300 mt-0.5">${item.desc}</div>
+        </div>
+        <button onclick='orderRefreshment(${JSON.stringify(item.buff)})' class="btn-golf px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 font-extrabold text-xs shrink-0">
+          Order Free
+        </button>
+      </div>
+    `).join('');
+  } else if (station === 'simulator') {
+    icon.textContent = '🖥️';
+    title.textContent = 'TrackMan Golf Simulator Bay';
+    subtitle.textContent = 'Test your swing distance & hit the 150-yard Island Target';
+    content.innerHTML = `
+      <div class="bg-black/45 border border-white/10 rounded-xl p-4 text-center">
+        <div class="text-xs uppercase text-emerald-300 font-bold">Simulator Session Stats</div>
+        <div class="grid grid-cols-2 gap-3 my-3">
+          <div class="bg-white/5 rounded-lg p-2.5">
+            <div class="text-xs text-slate-400">Shots Hit</div>
+            <div class="text-2xl font-extrabold text-white" id="sim-modal-hits">${state.simHits}</div>
+          </div>
+          <div class="bg-white/5 rounded-lg p-2.5">
+            <div class="text-xs text-slate-400">Target Bullseyes</div>
+            <div class="text-2xl font-extrabold text-amber-300" id="sim-modal-score">${state.simScore}</div>
+          </div>
+        </div>
+        <button onclick="fireSimulatorShot()" class="btn-golf w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold text-sm">
+          🏌️ Hit 7-Iron Simulator Shot!
+        </button>
+      </div>
+    `;
+  } else if (station === 'trophy') {
+    icon.textContent = '🏆';
+    title.textContent = 'Championship Trophy & Fireplace Lounge';
+    subtitle.textContent = 'Emerald Pines Club Records & Achievements';
+    const holesDone = state.holeCompleted.filter(Boolean).length;
+    content.innerHTML = `
+      <div class="bg-black/45 border border-amber-400/25 rounded-xl p-4 space-y-2.5">
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-300">Current Round Progress:</span>
+          <span class="font-bold text-white">${holesDone} / 9 Holes Completed</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-300">Current Score vs Par:</span>
+          <span class="font-bold text-amber-300">${getFormattedTotalScore()}</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-300">Best 9-Hole Round:</span>
+          <span class="font-bold text-emerald-300">${state.bestRoundScore !== null ? state.bestRoundScore + ' Strokes' : 'Complete 9 holes to set!'}</span>
+        </div>
+        <div class="flex justify-between text-sm">
+          <span class="text-slate-300">Indoor Practice Putts Sunk:</span>
+          <span class="font-bold text-white">${state.indoorPuttsMade}</span>
+        </div>
+      </div>
+      <p class="text-xs text-slate-300 text-center pt-1">Warm up by the hearth, then head straight out the front doors to the 1st Tee!</p>
+    `;
+  } else if (station === 'jukebox') {
+    icon.textContent = '🎵';
+    title.textContent = 'Clubhouse Wurlitzer Jukebox';
+    subtitle.textContent = 'Select ambient lounge music for your Clubhouse visit';
+    const currTrack = JUKEBOX_TRACKS[jukeboxTrackIdx];
+    content.innerHTML = `
+      <div class="bg-black/45 border border-sky-400/25 rounded-xl p-4 text-center space-y-3">
+        <div class="text-xs uppercase tracking-wider text-sky-300 font-bold">Featured Vinyl Selection</div>
+        <div class="text-lg font-extrabold text-white">${currTrack.name}</div>
+        <div class="flex gap-2.5 justify-center">
+          <button onclick="toggleJukeboxMusic(false); openClubhouseStation('jukebox')" class="btn-golf px-4 py-2.5 rounded-xl bg-emerald-500 text-slate-950 font-extrabold text-xs">
+            ${jukeboxMusicTimer ? '⏸ Pause Music' : '▶ Play Lounge Music'}
+          </button>
+          <button onclick="toggleJukeboxMusic(true); openClubhouseStation('jukebox')" class="btn-golf px-4 py-2.5 rounded-xl bg-amber-500 text-slate-950 font-extrabold text-xs">
+            ⏭ Next Track
+          </button>
+        </div>
+      </div>
+    `;
+  } else if (station === 'arcade') {
+    icon.textContent = '🕹️';
+    title.textContent = 'Golden Tee 1994 Arcade Cabinet';
+    subtitle.textContent = 'Spin the trackball to chip onto the virtual island green!';
+    content.innerHTML = `
+      <div class="bg-black/45 border border-emerald-400/25 rounded-xl p-4 text-center space-y-3">
+        <p class="text-xs text-slate-300">Take a quick 95-yard wedge challenge in the Clubhouse arcade!</p>
+        <div id="arcade-result-box" class="py-3 px-4 rounded-xl bg-emerald-950/60 border border-emerald-500/25 text-sm font-bold text-amber-300">
+          Pin Distance: 95 Yards • Ready to Spin!
+        </div>
+        <button onclick="playArcadeChip()" class="btn-golf w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 font-extrabold text-sm">
+          🕹️ Spin Trackball &amp; Chip!
+        </button>
+      </div>
+    `;
+  } else if (station === 'leaderboard') {
+    icon.textContent = '📋';
+    title.textContent = 'Emerald Pines Tour Leaderboard';
+    subtitle.textContent = '9-Hole Championship Standings (Par 36)';
+    const playerTot = state.strokes.reduce((a, b) => a + b, 0);
+    const playerStr = playerTot > 0 ? getFormattedTotalScore() : 'Not Started';
+    const pros = [
+      { name: 'A. Palmer (Club Legend)', score: '-4 (32)' },
+      { name: 'S. Scheffler', score: '-3 (33)' },
+      { name: 'R. McIlroy', score: '-2 (34)' },
+      { name: 'YOU (Member)', score: playerStr, highlight: true },
+      { name: 'T. Fleetwood', score: 'E (36)' }
+    ];
+    content.innerHTML = `
+      <div class="space-y-1.5">
+        ${pros.map((p, i) => `
+          <div class="flex items-center justify-between px-3.5 py-2.5 rounded-xl border ${p.highlight ? 'bg-amber-500/20 border-amber-400 text-white font-extrabold' : 'bg-black/40 border-white/10 text-slate-300'}">
+            <span>#${i + 1} ${p.name}</span>
+            <span class="${p.highlight ? 'text-amber-300' : 'text-emerald-300'} font-bold">${p.score}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+window.playArcadeChip = function() {
+  sound.init();
+  const dist = (Math.random() * 14).toFixed(1);
+  const box = document.getElementById('arcade-result-box');
+  if (parseFloat(dist) < 2.2) {
+    sound.playCupRattle();
+    if (box) box.textContent = `👑 CHIP-IN EAGLE! Straight into the cup!`;
+    showToast('🕹️ Arcade Chip-In!');
+  } else {
+    sound.playClubHit('iron', 0.6);
+    if (box) box.textContent = `⛳ Landed ${dist} feet from the pin!`;
+  }
+};
+
+window.equipClubSet = function(key) {
+  state.equippedSet = key;
+  updateClubAppearance();
+  sound.playUiChime();
+  showToast(`🏌️ Equipped ${CLUB_SETS[key].name}!`);
+  openClubhouseStation('proshop');
+};
+
+window.equipBallStyle = function(key) {
+  state.equippedBall = key;
+  const style = BALL_STYLES[key];
+  ballMat.color.setHex(style.color);
+  ballMat.emissive.setHex(style.emissive);
+  trailMat.color.setHex(style.trail);
+  sound.playUiChime();
+  showToast(`⚪ Equipped ${style.name}!`);
+  openClubhouseStation('proshop');
+};
+
+window.orderRefreshment = function(buff) {
+  state.activeBuff = buff;
+  sound.playUiChime();
+  const badge = document.getElementById('hud-buff-badge');
+  badge.textContent = `${buff.icon} ${buff.name}`;
+  badge.classList.remove('hidden');
+  document.getElementById('clubhouse-modal').classList.add('hidden');
+  showToast(`${buff.icon} Enjoyed refreshment! ${buff.name} active!`);
+};
+
+window.fireSimulatorShot = function() {
+  state.simHits++;
+  const carry = Math.round(142 + Math.random() * 24);
+  const offline = Math.round((Math.random() - 0.5) * 14);
+  const bullseye = Math.abs(carry - 150) <= 6 && Math.abs(offline) <= 5;
+  if (bullseye) {
+    state.simScore++;
+    sound.playCupRattle();
+    drawSimulatorScreen(`BULLSEYE! ${carry} YDS`, `Pin High! (${offline >= 0 ? '+' : ''}${offline} yds offline)`);
+    showToast(`🎯 Simulator Bullseye! Carry: ${carry} yds`);
+  } else {
+    sound.playClubHit('iron', 0.85);
+    drawSimulatorScreen(`CARRY: ${carry} YDS`, `Offline: ${offline >= 0 ? '+' : ''}${offline} yds • Aim for 150 yds!`);
+  }
+  const hitsEl = document.getElementById('sim-modal-hits');
+  const scoreEl = document.getElementById('sim-modal-score');
+  if (hitsEl) hitsEl.textContent = state.simHits;
+  if (scoreEl) scoreEl.textContent = state.simScore;
+};
+
+let indoorPuttAnim = 0;
+function triggerIndoorPutt() {
+  if (indoorPuttAnim > 0) return;
+  sound.playClubHit('putter', 0.45);
+  indoorPuttAnim = 1.0;
+  state.indoorPuttsMade++;
+  setTimeout(() => {
+    sound.playCupRattle();
+    showToast(`⛳ Sunk indoor practice putt! (${state.indoorPuttsMade} made)`);
+  }, 550);
+}
+
+// ----------------------------------------------------------------------------
+// 15. UI RENDERING, SCORECARD & MINIMAP RADAR
+// ----------------------------------------------------------------------------
+function getFormattedTotalScore() {
+  let playedPar = 0;
+  let playedStrokes = 0;
+  for (let i = 0; i < state.totalHoles; i++) {
+    if (state.strokes[i] > 0) {
+      playedPar += HOLES_DATA[i].par;
+      playedStrokes += state.strokes[i];
+    }
+  }
+  const diff = playedStrokes - playedPar;
+  const rel = diff === 0 ? 'E' : diff > 0 ? `+${diff}` : `${diff}`;
+  return `${rel} (${playedStrokes})`;
+}
+
+function updateHUD() {
+  const hole = HOLES_DATA[state.currentHoleIdx];
+  const totalYds = Math.round(Math.hypot(hole.pin.x - hole.tee.x, hole.pin.z - hole.tee.z));
+  const distToPinYds = Math.hypot(hole.pin.x - state.ballPos.x, hole.pin.z - state.ballPos.z);
+  const surface = getSurfaceAt(state.ballPos.x, state.ballPos.z);
+
+  document.getElementById('hud-hole-num').textContent = `${hole.num}/${state.totalHoles}`;
+  document.getElementById('hud-hole-name').textContent = hole.name;
+  document.getElementById('hud-hole-par').textContent = hole.par;
+  document.getElementById('hud-hole-yds').textContent = totalYds;
+  document.getElementById('hud-stroke').textContent = state.strokes[state.currentHoleIdx] + (state.ballAtRest ? 1 : 0);
+
+  if (distToPinYds < 15) {
+    document.getElementById('hud-dist-pin').textContent = `${Math.max(1, Math.round(distToPinYds * 3))} ft`;
+  } else {
+    document.getElementById('hud-dist-pin').textContent = `${Math.round(distToPinYds)} yds`;
+  }
+
+  document.getElementById('hud-lie').textContent = getLieLabel(surface);
+  document.getElementById('hud-total-score').textContent = getFormattedTotalScore();
+
+  // Wind compass
+  const deg = Math.round(THREE.MathUtils.radToDeg(state.windAngle));
+  document.getElementById('wind-arrow').style.transform = `rotate(${deg}deg)`;
+  const dirs = ['S', 'SE', 'E', 'NE', 'N', 'NW', 'W', 'SW'];
+  const dirLabel = dirs[Math.round(((deg % 360 + 360) % 360) / 45) % 8];
+  document.getElementById('hud-wind').textContent = `${state.windSpeed} mph ${dirLabel}`;
+
+  // Player zone label
+  const activePos = state.mode === 'cart' ? state.cartPos : state.playerPos;
+  const pSurf = getSurfaceAt(activePos.x, activePos.z);
+  document.getElementById('zone-label').textContent =
+    state.mode === 'cart'
+      ? `🛺 Golf Cart • ${Math.abs(Math.round(state.cartSpeed * 1.4))} mph`
+      : pSurf === 'clubhouse' ? '🏛️ Clubhouse Interior' : `Hole ${hole.num} • ${getLieLabel(pSurf)}`;
+}
+
+function renderClubSelector() {
+  const container = document.getElementById('club-selector');
+  const set = CLUB_SETS[state.equippedSet];
+  container.innerHTML = BASE_CLUBS.map((c, idx) => {
+    const active = idx === state.selectedClubIdx;
+    const adjYds = Math.round(c.maxYds * (set.powerMult + (state.activeBuff?.powerBonus || 0)));
+    return `
+      <button onclick="selectClub(${idx})" class="btn-golf px-3 py-1.5 rounded-xl text-left shrink-0 border transition ${active ? 'bg-emerald-500 text-slate-950 border-emerald-300 font-extrabold shadow' : 'bg-white/5 text-slate-200 border-white/10 hover:bg-white/15'}">
+        <div class="text-[10px] opacity-80">[${idx + 1}] ${c.short}</div>
+        <div class="text-xs font-bold leading-tight">${c.name.split(' ')[0]}</div>
+        <div class="text-[10px] ${active ? 'text-slate-900 font-bold' : 'text-amber-300'}">${adjYds}y</div>
+      </button>
+    `;
+  }).join('');
+}
+
+window.selectClub = function(idx) {
+  state.selectedClubIdx = idx;
+  renderClubSelector();
+  updateClubAppearance();
+};
+
+function renderScorecard() {
+  const wrap = document.getElementById('scorecard-tables-wrap');
+  const sub = document.getElementById('scorecard-subtitle');
+  const toggleBtn = document.getElementById('btn-toggle-round-len');
+  const coursePar = state.totalHoles === 18 ? 72 : 36;
+  if (sub) sub.textContent = `${state.totalHoles}-Hole Championship Course • Par ${coursePar} • Click any hole to travel there`;
+  if (toggleBtn) toggleBtn.textContent = state.totalHoles === 18 ? 'Switch to 9 Holes' : 'Switch to 18 Holes';
+
+  const buildNineTable = (startIdx, label) => {
+    const slice = HOLES_DATA.slice(startIdx, startIdx + 9);
+    const headers = slice.map(h => `<th class="p-2">${h.num}</th>`).join('');
+    const parCells = slice.map(h => `<td class="p-2 font-semibold text-slate-300">${h.par}</td>`).join('');
+    const strokeCells = slice.map((h, offset) => {
+      const idx = startIdx + offset;
+      const s = state.strokes[idx];
+      if (s === 0) return `<td class="p-2 text-slate-500">-</td>`;
+      const diff = s - h.par;
+      const cls = diff < 0 ? 'text-emerald-400 font-extrabold' : diff > 0 ? 'text-rose-300 font-bold' : 'text-white font-bold';
+      return `<td class="p-2 ${cls}">${s}</td>`;
+    }).join('');
+    const nineStrokes = state.strokes.slice(startIdx, startIdx + 9).reduce((a, b) => a + b, 0);
+    return `
+      <table class="w-full text-xs sm:text-sm text-center border-collapse mb-3">
+        <thead>
+          <tr class="bg-emerald-950/80 text-emerald-200 border-b border-white/15">
+            <th class="p-2 text-left">Hole</th>${headers}
+            <th class="p-2 bg-amber-500/20 text-amber-300">${label}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="border-b border-white/10 bg-white/5">
+            <td class="p-2 text-left font-bold text-emerald-300">PAR</td>${parCells}
+            <td class="p-2 font-extrabold text-white bg-amber-500/15">36</td>
+          </tr>
+          <tr>
+            <td class="p-2 text-left font-bold text-amber-300">SCORE</td>${strokeCells}
+            <td class="p-2 font-extrabold text-amber-300 bg-amber-500/15">${nineStrokes || '-'}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+  };
+
+  let html = buildNineTable(0, 'OUT');
+  if (state.totalHoles === 18) {
+    const total18 = state.strokes.slice(0, 18).reduce((a, b) => a + b, 0);
+    html += buildNineTable(9, 'IN');
+    html += `
+      <div class="flex items-center justify-between bg-amber-500/15 border border-amber-400/35 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-extrabold">
+        <span class="text-amber-300">18-HOLE CHAMPIONSHIP TOTAL (PAR 72)</span>
+        <span class="text-white">${total18 > 0 ? getFormattedTotalScore() : 'Not Started'}</span>
+      </div>
+    `;
+  }
+  wrap.innerHTML = html;
+
+  const warpGrid = document.getElementById('hole-warp-grid');
+  warpGrid.innerHTML = HOLES_DATA.slice(0, state.totalHoles).map((h, i) => {
+    const isCurr = i === state.currentHoleIdx;
+    return `
+      <button onclick="warpToHole(${i})" class="btn-golf p-2.5 rounded-xl border text-left ${isCurr ? 'bg-emerald-600/40 border-emerald-400 text-white' : 'bg-black/40 border-white/10 text-slate-200 hover:bg-white/10'}">
+        <div class="text-xs font-extrabold text-amber-300">Hole ${h.num} • Par ${h.par}</div>
+        <div class="text-[11px] truncate text-slate-300">${h.name}</div>
+      </button>
+    `;
+  }).join('');
+}
+
+window.warpToHole = function(idx) {
+  closeAllModals();
+  loadHole(idx, true);
+  showToast(`⛳ Teeing off on Hole ${idx + 1}: ${HOLES_DATA[idx].name}`);
+};
+
+function drawMinimap() {
+  const mc = document.getElementById('minimap-canvas');
+  if (!mc) return;
+  const ctx = mc.getContext('2d');
+  const w = mc.width, h = mc.height;
+  ctx.fillStyle = '#173822';
+  ctx.fillRect(0, 0, w, h);
+
+  // Scale world (-360..320 X, -420..280 Z) to 136x136
+  const toMapX = wx => ((wx + 370) / 700) * w;
+  const toMapY = wz => ((wz + 430) / 720) * h;
+
+  // Draw fairways & greens
+  HOLES_DATA.forEach((hole, idx) => {
+    ctx.strokeStyle = idx === state.currentHoleIdx ? '#4ade80' : 'rgba(74, 222, 128, 0.35)';
+    ctx.lineWidth = idx === state.currentHoleIdx ? 4 : 2.5;
+    ctx.beginPath();
+    ctx.moveTo(toMapX(hole.tee.x), toMapY(hole.tee.z));
+    ctx.lineTo(toMapX(hole.pin.x), toMapY(hole.pin.z));
+    ctx.stroke();
+
+    // Pin dot
+    ctx.fillStyle = idx === state.currentHoleIdx ? '#ef4444' : '#fca5a5';
+    ctx.beginPath();
+    ctx.arc(toMapX(hole.pin.x), toMapY(hole.pin.z), 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Clubhouse icon
+  ctx.fillStyle = '#facc15';
+  ctx.fillRect(toMapX(-24), toMapY(38), 10, 8);
+
+  // Golf Ball
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(toMapX(state.ballPos.x), toMapY(state.ballPos.z), 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Golf Cart icon
+  ctx.fillStyle = '#facc15';
+  ctx.fillRect(toMapX(state.cartPos.x) - 2.5, toMapY(state.cartPos.z) - 2.5, 5, 5);
+
+  // Player dot
+  const pActive = state.mode === 'cart' ? state.cartPos : state.playerPos;
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.arc(toMapX(pActive.x), toMapY(pActive.z), 3.2, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function showToast(msg) {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'glass-gold px-4 py-2 rounded-full text-xs sm:text-sm font-bold text-white shadow-lg transition-opacity duration-300';
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 320);
+  }, 2800);
+}
+
+function closeAllModals() {
+  document.getElementById('start-modal').classList.add('hidden');
+  document.getElementById('hole-complete-modal').classList.add('hidden');
+  document.getElementById('scorecard-modal').classList.add('hidden');
+  document.getElementById('clubhouse-modal').classList.add('hidden');
+}
+
+// ----------------------------------------------------------------------------
+// 16. INPUT HANDLING (Keyboard, Pointer Lock, Mouse Drag, Touch)
+// ----------------------------------------------------------------------------
+let isMouseDragging = false;
+let lastMouseX = 0, lastMouseY = 0;
+
+window.addEventListener('keydown', e => {
+  state.keys[e.code] = true;
+
+  if (!state.started) return;
+
+  // Pressing W or S while addressing the ball seamlessly transitions back to First-Person Walk mode
+  if (state.mode === 'swing' && !state.isChargingSwing && !state.swingAnimating &&
+      (e.code === 'KeyW' || e.code === 'KeyS')) {
+    setMode('walk');
+    return;
+  }
+
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    const sc = document.getElementById('scorecard-modal');
+    if (sc.classList.contains('hidden')) {
+      if (document.pointerLockElement) document.exitPointerLock();
+      renderScorecard();
+      sc.classList.remove('hidden');
+    } else {
+      sc.classList.add('hidden');
+    }
+  } else if (e.code === 'KeyF') {
+    setMode(state.mode === 'swing' ? 'walk' : 'swing');
+  } else if (e.code === 'KeyC') {
+    summonOrToggleCart();
+  } else if (e.code === 'KeyT') {
+    teleportToBall();
+  } else if (e.code === 'KeyM') {
+    setMode(state.mode === 'flyover' ? 'swing' : 'flyover');
+  } else if (e.code === 'KeyE') {
+    if (state.mode === 'cart') {
+      exitGolfCart();
+    } else if (state.activeInteractable) {
+      state.activeInteractable.action();
+    } else if (state.mode === 'walk' && state.playerPos.distanceTo(state.ballPos) < 4.5) {
+      setMode('swing');
+    }
+  } else if (e.code === 'Space') {
+    if (state.mode === 'swing') {
+      e.preventDefault();
+      if (!e.repeat) startChargingSwing();
+    }
+  } else if (['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].includes(e.code)) {
+    const idx = parseInt(e.code.replace('Digit', ''), 10) - 1;
+    selectClub(idx);
+  }
+});
+
+window.addEventListener('keyup', e => {
+  state.keys[e.code] = false;
+  if (e.code === 'Space' && state.isChargingSwing) {
+    releaseSwing();
+  }
+});
+
+// Mouse Look & Swing Charge on Canvas
+canvas.addEventListener('mousedown', e => {
+  if (!state.started) return;
+  sound.init();
+
+  if (state.mode === 'walk') {
+    isMouseDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    if (canvas.requestPointerLock) {
+      try { canvas.requestPointerLock(); } catch (_) {}
+    }
+  } else if (state.mode === 'swing' && e.button === 0) {
+    startChargingSwing();
+  }
+});
+
+window.addEventListener('mouseup', e => {
+  isMouseDragging = false;
+  if (state.mode === 'swing' && state.isChargingSwing && e.button === 0) {
+    releaseSwing();
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (!state.started || state.mode !== 'walk') return;
+
+  if (document.pointerLockElement === canvas) {
+    state.playerYaw -= e.movementX * 0.0023;
+    state.playerPitch = Math.max(-1.25, Math.min(1.25, state.playerPitch - e.movementY * 0.0021));
+  } else if (isMouseDragging) {
+    const dx = e.clientX - lastMouseX;
+    const dy = e.clientY - lastMouseY;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+    state.playerYaw -= dx * 0.004;
+    state.playerPitch = Math.max(-1.25, Math.min(1.25, state.playerPitch - dy * 0.0035));
+  }
+});
+
+// Touch Look & Touch Controls
+let touchLookId = null;
+let lastTouchX = 0, lastTouchY = 0;
+
+canvas.addEventListener('touchstart', e => {
+  if (!state.started) return;
+  sound.init();
+  for (const t of e.changedTouches) {
+    if (touchLookId === null) {
+      touchLookId = t.identifier;
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+    }
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchmove', e => {
+  if (!state.started) return;
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLookId) {
+      const dx = t.clientX - lastTouchX;
+      const dy = t.clientY - lastTouchY;
+      lastTouchX = t.clientX;
+      lastTouchY = t.clientY;
+      if (state.mode === 'walk') {
+        state.playerYaw -= dx * 0.005;
+        state.playerPitch = Math.max(-1.2, Math.min(1.2, state.playerPitch - dy * 0.004));
+      } else if (state.mode === 'swing') {
+        state.aimYaw -= dx * 0.003;
+      }
+    }
+  }
+}, { passive: true });
+
+canvas.addEventListener('touchend', e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchLookId) touchLookId = null;
+  }
+});
+
+// UI Button Bindings
+document.getElementById('btn-start-tee').addEventListener('click', () => {
+  sound.init();
+  state.started = true;
+  state.totalHoles = 9;
+  document.getElementById('start-modal').classList.add('hidden');
+  document.getElementById('hud-top').classList.remove('hidden');
+  loadHole(0, true);
+  showToast('🏌️ 9-Hole Round started! Hold SPACE or Click to tee off.');
+});
+
+document.getElementById('btn-start-18').addEventListener('click', () => {
+  sound.init();
+  state.started = true;
+  state.totalHoles = 18;
+  document.getElementById('start-modal').classList.add('hidden');
+  document.getElementById('hud-top').classList.remove('hidden');
+  loadHole(0, true);
+  showToast('🏆 18-Hole Championship Round started! Press [C] anytime to drive the Golf Cart.');
+});
+
+document.getElementById('btn-start-clubhouse').addEventListener('click', () => {
+  sound.init();
+  state.started = true;
+  document.getElementById('start-modal').classList.add('hidden');
+  document.getElementById('hud-top').classList.remove('hidden');
+  loadHole(0, false);
+  teleportToClubhouse();
+});
+
+document.getElementById('btn-toggle-mode').addEventListener('click', () => {
+  setMode(state.mode === 'swing' ? 'walk' : 'swing');
+});
+document.getElementById('btn-summon-cart').addEventListener('click', summonOrToggleCart);
+document.getElementById('btn-teleport-ball').addEventListener('click', teleportToBall);
+document.getElementById('btn-flyover').addEventListener('click', () => {
+  setMode(state.mode === 'flyover' ? 'swing' : 'flyover');
+});
+document.getElementById('btn-scorecard').addEventListener('click', () => {
+  renderScorecard();
+  document.getElementById('scorecard-modal').classList.remove('hidden');
+});
+document.getElementById('btn-toggle-round-len').addEventListener('click', () => {
+  state.totalHoles = state.totalHoles === 9 ? 18 : 9;
+  if (state.currentHoleIdx >= state.totalHoles) state.currentHoleIdx = 0;
+  renderScorecard();
+  updateHUD();
+  showToast(`📋 Round format set to ${state.totalHoles} Holes`);
+});
+document.getElementById('btn-close-scorecard').addEventListener('click', () => {
+  document.getElementById('scorecard-modal').classList.add('hidden');
+});
+document.getElementById('btn-warp-clubhouse').addEventListener('click', teleportToClubhouse);
+document.getElementById('btn-reset-round').addEventListener('click', () => {
+  state.strokes = Array(18).fill(0);
+  state.holeCompleted = Array(18).fill(false);
+  closeAllModals();
+  loadHole(0, true);
+  showToast(`↺ Fresh ${state.totalHoles}-hole round started on Hole 1!`);
+});
+document.getElementById('btn-help').addEventListener('click', () => {
+  document.getElementById('start-modal').classList.remove('hidden');
+});
+document.getElementById('btn-close-ch-modal').addEventListener('click', () => {
+  document.getElementById('clubhouse-modal').classList.add('hidden');
+});
+
+document.getElementById('btn-next-hole').addEventListener('click', () => {
+  document.getElementById('hole-complete-modal').classList.add('hidden');
+  if (state.currentHoleIdx < state.totalHoles - 1) {
+    loadHole(state.currentHoleIdx + 1, true);
+  } else {
+    renderScorecard();
+    document.getElementById('scorecard-modal').classList.remove('hidden');
+    showToast(`🏆 Congratulations on completing all ${state.totalHoles} holes!`);
+  }
+});
+document.getElementById('btn-visit-clubhouse-hc').addEventListener('click', teleportToClubhouse);
+
+// Aim & Swing On-Screen Buttons
+document.getElementById('btn-aim-left').addEventListener('click', () => { state.aimYaw += 0.045; });
+document.getElementById('btn-aim-right').addEventListener('click', () => { state.aimYaw -= 0.045; });
+document.getElementById('btn-toggle-arc').addEventListener('click', e => {
+  state.showAimLine = !state.showAimLine;
+  aimLine.visible = state.showAimLine && state.mode === 'swing';
+  e.target.textContent = `Aim Line: ${state.showAimLine ? 'ON' : 'OFF'}`;
+});
+
+const swingTouchBtn = document.getElementById('btn-swing-touch');
+swingTouchBtn.addEventListener('mousedown', startChargingSwing);
+swingTouchBtn.addEventListener('mouseup', releaseSwing);
+swingTouchBtn.addEventListener('touchstart', e => { e.preventDefault(); startChargingSwing(); });
+swingTouchBtn.addEventListener('touchend', e => { e.preventDefault(); releaseSwing(); });
+
+document.querySelectorAll('[data-move]').forEach(btn => {
+  const dir = btn.getAttribute('data-move');
+  btn.addEventListener('touchstart', e => { e.preventDefault(); state.touchMove[dir] = true; });
+  btn.addEventListener('touchend', e => { e.preventDefault(); state.touchMove[dir] = false; });
+});
+document.getElementById('btn-mobile-interact').addEventListener('click', () => {
+  if (state.mode === 'cart') exitGolfCart();
+  else if (state.activeInteractable) state.activeInteractable.action();
+});
+
+// ----------------------------------------------------------------------------
+// 17. MAIN SIMULATION & RENDER LOOP
+// ----------------------------------------------------------------------------
+function updateGolfCartDriving(dt) {
+  if (state.mode !== 'cart') return;
+
+  let throttle = 0;
+  let steerInput = 0;
+  if (state.keys['KeyW'] || state.keys['ArrowUp'] || state.touchMove.forward) throttle += 1;
+  if (state.keys['KeyS'] || state.keys['ArrowDown'] || state.touchMove.backward) throttle -= 1;
+  if (state.keys['KeyA'] || state.keys['ArrowLeft'] || state.touchMove.left) steerInput += 1;
+  if (state.keys['KeyD'] || state.keys['ArrowRight'] || state.touchMove.right) steerInput -= 1;
+
+  const sprint = state.keys['ShiftLeft'] || state.keys['ShiftRight'];
+  const maxFwd = sprint ? 24.0 : 18.5;
+  const maxRev = -8.5;
+
+  if (throttle > 0) {
+    state.cartSpeed = Math.min(maxFwd, state.cartSpeed + 22.0 * dt);
+  } else if (throttle < 0) {
+    state.cartSpeed = Math.max(maxRev, state.cartSpeed - 24.0 * dt);
+  } else {
+    // Natural rolling resistance
+    const drag = 11.0 * dt;
+    if (Math.abs(state.cartSpeed) <= drag) state.cartSpeed = 0;
+    else state.cartSpeed -= Math.sign(state.cartSpeed) * drag;
+  }
+
+  // Smooth steering
+  state.cartSteer += (steerInput * 0.55 - state.cartSteer) * Math.min(1, dt * 10);
+  if (cartSteeringWheel) cartSteeringWheel.rotation.z = -state.cartSteer * 1.6;
+
+  if (Math.abs(state.cartSpeed) > 0.15) {
+    const dirSign = state.cartSpeed >= 0 ? 1 : -1;
+    state.cartYaw += state.cartSteer * 2.15 * dirSign * dt * Math.min(1, Math.abs(state.cartSpeed) / 6);
+  }
+
+  const nextX = state.cartPos.x + Math.sin(state.cartYaw) * state.cartSpeed * dt;
+  const nextZ = state.cartPos.z + Math.cos(state.cartYaw) * state.cartSpeed * dt;
+
+  // Prevent driving inside the Clubhouse walls
+  const insideClubhouseBox = nextX > -25.5 && nextX < 25.5 && nextZ > 34.5 && nextZ < 77.5;
+  if (!insideClubhouseBox && !checkCollision(nextX, nextZ)) {
+    state.cartPos.x = nextX;
+    state.cartPos.z = nextZ;
+  } else {
+    state.cartSpeed *= -0.25;
+  }
+
+  // Sync player position to cart so HUD/minimap stay accurate
+  state.playerPos.set(state.cartPos.x, 1.78, state.cartPos.z);
+  golfCartGroup.position.copy(state.cartPos);
+  golfCartGroup.rotation.y = state.cartYaw;
+
+  // Spin wheels
+  state.cartWheelSpin += state.cartSpeed * dt * 3.5;
+  cartWheels.forEach((w, idx) => {
+    w.rotation.y = idx < 2 ? state.cartSteer * 0.55 : 0;
+    w.children[0].rotation.x = state.cartWheelSpin;
+    w.children[1].rotation.x = state.cartWheelSpin;
+  });
+
+  // Show contextual exit/address prompt
+  const promptEl = document.getElementById('interact-prompt');
+  const textEl = document.getElementById('interact-text');
+  if (state.cartPos.distanceTo(state.ballPos) < 5.5 && state.ballAtRest) {
+    textEl.textContent = 'Address Golf Ball [F] or Exit Cart [E]';
+  } else {
+    textEl.textContent = 'Exit Golf Cart [E / C]';
+  }
+  promptEl.classList.remove('hidden');
+}
+
+function updatePlayerMovement(dt) {
+  if (state.mode !== 'walk') return;
+
+  const sprint = state.keys['ShiftLeft'] || state.keys['ShiftRight'];
+  const speed = sprint ? 16.5 : 8.5;
+
+  let moveForward = 0;
+  let moveRight = 0;
+  if (state.keys['KeyW'] || state.keys['ArrowUp'] || state.touchMove.forward) moveForward += 1;
+  if (state.keys['KeyS'] || state.keys['ArrowDown'] || state.touchMove.backward) moveForward -= 1;
+  if (state.keys['KeyD'] || state.keys['ArrowRight'] || state.touchMove.right) moveRight += 1;
+  if (state.keys['KeyA'] || state.keys['ArrowLeft'] || state.touchMove.left) moveRight -= 1;
+
+  if (moveForward !== 0 || moveRight !== 0) {
+    const len = Math.hypot(moveForward, moveRight);
+    moveForward /= len;
+    moveRight /= len;
+
+    const sinY = Math.sin(state.playerYaw);
+    const cosY = Math.cos(state.playerYaw);
+
+    const dx = (-sinY * moveForward + cosY * moveRight) * speed * dt;
+    const dz = (-cosY * moveForward - sinY * moveRight) * speed * dt;
+
+    const nextX = state.playerPos.x + dx;
+    const nextZ = state.playerPos.z + dz;
+
+    if (!checkCollision(nextX, state.playerPos.z)) state.playerPos.x = nextX;
+    if (!checkCollision(state.playerPos.x, nextZ)) state.playerPos.z = nextZ;
+
+    // Gentle head-bob when walking
+    const onDeck = getSurfaceAt(state.playerPos.x, state.playerPos.z) === 'clubhouse';
+    const baseEye = onDeck ? 2.08 : 1.78;
+    state.playerPos.y = baseEye + Math.sin(performance.now() * 0.011) * 0.04;
+  } else {
+    const onDeck = getSurfaceAt(state.playerPos.x, state.playerPos.z) === 'clubhouse';
+    state.playerPos.y = onDeck ? 2.08 : 1.78;
+  }
+
+  // Check proximity to Clubhouse interactables & golf ball
+  let closest = null;
+  let bestDist = Infinity;
+  for (const item of interactables) {
+    const dist = state.playerPos.distanceTo(item.pos);
+    if (dist <= item.radius && dist < bestDist) {
+      bestDist = dist;
+      closest = item;
+    }
+  }
+
+  const promptEl = document.getElementById('interact-prompt');
+  const textEl = document.getElementById('interact-text');
+  state.activeInteractable = closest;
+
+  if (closest) {
+    textEl.textContent = closest.getPrompt();
+    promptEl.classList.remove('hidden');
+  } else if (state.playerPos.distanceTo(state.ballPos) < 4.2) {
+    textEl.textContent = 'Address Golf Ball [E / F]';
+    promptEl.classList.remove('hidden');
+  } else {
+    promptEl.classList.add('hidden');
+  }
+}
+
+function checkCollision(x, z) {
+  // Keep within world bounds
+  if (x < -420 || x > 420 || z < -450 || z > 320) return true;
+
+  // Check closed Clubhouse front doors
+  if (!state.doorsOpen && Math.abs(x) < 2.7 && Math.abs(z - 38) < 0.7) {
+    return true;
+  }
+
+  for (const box of colliders) {
+    if (x >= box.minX && x <= box.maxX && z >= box.minZ && z <= box.maxZ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function updateCamera(dt) {
+  const hole = HOLES_DATA[state.currentHoleIdx];
+
+  if (state.mode === 'walk') {
+    camera.position.copy(state.playerPos);
+    const euler = new THREE.Euler(state.playerPitch, state.playerYaw, 0, 'YXZ');
+    camera.quaternion.setFromEuler(euler);
+  } else if (state.mode === 'cart') {
+    // Smooth Third-Person Chase Camera behind the Golf Cart
+    const backX = Math.sin(state.cartYaw) * 5.6;
+    const backZ = Math.cos(state.cartYaw) * 5.6;
+    const desiredCam = new THREE.Vector3(
+      state.cartPos.x - backX,
+      3.15,
+      state.cartPos.z - backZ
+    );
+    camera.position.lerp(desiredCam, Math.min(1, dt * 8));
+    camera.lookAt(
+      state.cartPos.x + Math.sin(state.cartYaw) * 4.5,
+      1.35,
+      state.cartPos.z + Math.cos(state.cartYaw) * 4.5
+    );
+  } else if (state.mode === 'swing') {
+    if (state.ballAtRest) {
+      // Third-person over-the-shoulder asymmetric framing:
+      // Positions camera behind and slightly right of the golfer while aiming lookAt to the right-center horizon,
+      // placing both the golfer and addressed golf ball cleanly in the lower-left third of the viewport!
+      const aimX = Math.sin(state.aimYaw);
+      const aimZ = Math.cos(state.aimYaw);
+      // Right-hand perpendicular vector relative to shot line
+      const rightX = -Math.cos(state.aimYaw);
+      const rightZ = Math.sin(state.aimYaw);
+
+      const targetCamPos = new THREE.Vector3(
+        state.ballPos.x - aimX * 3.65 + rightX * 0.65,
+        1.92,
+        state.ballPos.z - aimZ * 3.65 + rightZ * 0.65
+      );
+      camera.position.lerp(targetCamPos, Math.min(1, dt * 8));
+
+      // Look slightly right of the shot line & ahead so ball + golfer rest on the left-lower third
+      const lookTarget = new THREE.Vector3(
+        state.ballPos.x + aimX * 16 + rightX * 2.85,
+        1.15,
+        state.ballPos.z + aimZ * 16 + rightZ * 2.85
+      );
+      camera.lookAt(lookTarget);
+    } else {
+      // Stay grounded at the golfer's shot location and watch the ball fly through the air!
+      const aimX = Math.sin(state.aimYaw);
+      const aimZ = Math.cos(state.aimYaw);
+      const rightX = -Math.cos(state.aimYaw);
+      const rightZ = Math.sin(state.aimYaw);
+
+      const stanceCamPos = new THREE.Vector3(
+        state.lastSafeBallPos.x - aimX * 3.65 + rightX * 0.65,
+        2.05,
+        state.lastSafeBallPos.z - aimZ * 3.65 + rightZ * 0.65
+      );
+      camera.position.lerp(stanceCamPos, Math.min(1, dt * 6));
+      camera.lookAt(state.ballPos.x, Math.max(0.35, state.ballPos.y), state.ballPos.z);
+    }
+  } else if (state.mode === 'flyover') {
+    const midX = (hole.tee.x + hole.pin.x) * 0.5;
+    const midZ = (hole.tee.z + hole.pin.z) * 0.5;
+    const dist = Math.hypot(hole.pin.x - hole.tee.x, hole.pin.z - hole.tee.z);
+    const orbit = performance.now() * 0.00025;
+    camera.position.set(
+      midX + Math.cos(orbit) * (dist * 0.55),
+      Math.max(85, dist * 0.58),
+      midZ + Math.sin(orbit) * (dist * 0.55)
+    );
+    camera.lookAt(midX, 0, midZ);
+  }
+}
+
+function updateSwingAndAnimations(dt) {
+  // Aiming with A / D or Left / Right Arrows in Swing Mode
+  if (state.mode === 'swing' && state.ballAtRest && !state.swingAnimating) {
+    const aimSpeed = 0.85;
+    if (state.keys['KeyA'] || state.keys['ArrowLeft']) state.aimYaw += aimSpeed * dt;
+    if (state.keys['KeyD'] || state.keys['ArrowRight']) state.aimYaw -= aimSpeed * dt;
+  }
+
+  // Power Meter Oscillation when charging swing
+  if (state.isChargingSwing) {
+    state.swingPower += state.swingDir * dt * 1.15;
+    if (state.swingPower >= 1.0) {
+      state.swingPower = 1.0;
+      state.swingDir = -1;
+    } else if (state.swingPower <= 0.08) {
+      state.swingPower = 0.08;
+      state.swingDir = 1;
+    }
+  }
+
+  const pct = Math.round(state.swingPower * 100);
+  document.getElementById('swing-fill').style.width = `${pct}%`;
+  document.getElementById('swing-power-pct').textContent = `${pct}%`;
+
+  // Update Curved Circular Swing Arc SVG Gauge
+  const arcFill = document.getElementById('swing-arc-fill');
+  if (arcFill) {
+    const circumference = 201;
+    const displayRatio = state.isChargingSwing ? state.swingPower : 0;
+    arcFill.style.strokeDashoffset = `${circumference * (1 - displayRatio)}`;
+    arcFill.style.stroke = displayRatio > 0.92 ? '#ef4444' : displayRatio > 0.78 ? '#facc15' : '#22c55e';
+  }
+
+  const club = BASE_CLUBS[state.selectedClubIdx];
+  const set = CLUB_SETS[state.equippedSet];
+  const estRatio = state.isChargingSwing ? state.swingPower : 0.85;
+  const estYds = Math.round(club.maxYds * estRatio * (set.powerMult + (state.activeBuff?.powerBonus || 0)));
+  document.getElementById('swing-est-yds').textContent = `${estYds} yds`;
+
+  // Third-Person Golfer Swing Animation
+  if (state.swingAnimating) {
+    state.swingAnimProgress += dt * 4.4;
+    if (state.swingAnimProgress >= 0.48 && state.pendingShotData) {
+      executePendingShot();
+    }
+    if (state.swingAnimProgress >= 1.0) {
+      state.swingAnimating = false;
+      state.swingAnimProgress = 0;
+    }
+  }
+
+  // Position & Animate Third-Person Articulated 3D Golfer beside the Ball
+  if (golferGroup.visible) {
+    const anchorPos = state.ballAtRest ? state.ballPos : state.lastSafeBallPos;
+    const aimX = Math.sin(state.aimYaw);
+    const aimZ = Math.cos(state.aimYaw);
+    // Left-hand perpendicular offset so right-handed golfer stands cleanly beside the ball
+    const leftX = Math.cos(state.aimYaw);
+    const leftZ = -Math.sin(state.aimYaw);
+
+    golferGroup.position.set(
+      anchorPos.x + leftX * 0.72 - aimX * 0.05,
+      0.06,
+      anchorPos.z + leftZ * 0.72 - aimZ * 0.05
+    );
+    // Face perpendicular to target line (right-handed golf stance)
+    golferGroup.rotation.y = state.aimYaw - Math.PI / 2;
+
+    if (state.swingAnimating) {
+      const p = state.swingAnimProgress;
+      // Rapid downswing through impact followed by full follow-through wrap
+      const swingCurve = p < 0.48
+        ? THREE.MathUtils.lerp(1.45, -0.15, p / 0.48)
+        : THREE.MathUtils.lerp(-0.15, -1.75, (p - 0.48) / 0.52);
+      golferSwingPivot.rotation.z = swingCurve;
+      golferTorso.rotation.y = -swingCurve * 0.42;
+      golferHips.rotation.y = -swingCurve * 0.22;
+    } else if (state.isChargingSwing) {
+      // Coil backswing smoothly proportional to power gauge
+      const backCoil = state.swingPower * 1.48;
+      golferSwingPivot.rotation.z = backCoil;
+      golferTorso.rotation.y = -backCoil * 0.42;
+      golferHips.rotation.y = -backCoil * 0.18;
+    } else if (!state.ballAtRest) {
+      // Hold finished follow-through pose while watching ball fly
+      golferSwingPivot.rotation.z = -1.45;
+      golferTorso.rotation.y = 0.55;
+      golferHips.rotation.y = 0.28;
+    } else {
+      // Subtle athletic idle breathing at address
+      const breathe = Math.sin(performance.now() * 0.0035) * 0.02;
+      golferSwingPivot.rotation.z = breathe;
+      golferTorso.rotation.y = 0;
+      golferHips.rotation.y = 0;
+    }
+  }
+
+  // Smooth Clubhouse Double Doors Animation
+  const targetDoorAngle = state.doorsOpen ? Math.PI * 0.48 : 0;
+  state.doorAngle += (targetDoorAngle - state.doorAngle) * Math.min(1, dt * 6);
+  if (leftDoorPivot && rightDoorPivot) {
+    leftDoorPivot.rotation.y = state.doorAngle;
+    rightDoorPivot.rotation.y = -state.doorAngle;
+  }
+
+  // Fireplace Flicker & Indoor Putting Green Ball Roll
+  if (fireplaceFlame && fireplaceLight) {
+    const flick = 0.9 + Math.sin(performance.now() * 0.018) * 0.14;
+    fireplaceFlame.scale.set(1, flick, 1);
+    fireplaceLight.intensity = 1.25 * flick;
+  }
+
+  if (indoorPuttAnim > 0 && indoorPuttingBall) {
+    indoorPuttAnim = Math.max(0, indoorPuttAnim - dt * 1.2);
+    const t = 1 - indoorPuttAnim;
+    indoorPuttingBall.position.z = THREE.MathUtils.lerp(69.5, 60.5, t);
+    if (indoorPuttAnim === 0) {
+      setTimeout(() => {
+        if (indoorPuttingBall) indoorPuttingBall.position.set(-12, 0.48, 69.5);
+      }, 650);
+    }
+  }
+
+  // Flag Breeze Flutter
+  const tNow = performance.now() * 0.003;
+  holeFlagMeshes.forEach((flag, idx) => {
+    flag.rotation.y = state.windAngle + Math.sin(tNow + idx) * 0.18;
+  });
+}
+
+// Main Animation Loop
+let lastFrameTime = performance.now();
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+  lastFrameTime = now;
+
+  if (state.started) {
+    updateGolfCartDriving(dt);
+    updatePlayerMovement(dt);
+    updateSwingAndAnimations(dt);
+    updateBallPhysics(dt);
+    updateAimPreviewLine();
+    updateCamera(dt);
+    if (state.mode === 'walk' || state.mode === 'cart') drawMinimap();
+  } else {
+    // Gentle scenic camera orbit over Hole 1 & Clubhouse on title overlay
+    const orbit = now * 0.00018;
+    camera.position.set(Math.sin(orbit) * 34, 15, 28 + Math.cos(orbit) * 24);
+    camera.lookAt(0, 2, -25);
+  }
+
+  // Sync 3D Ball Mesh & Beacons
+  golfBallMesh.position.copy(state.ballPos);
+  addressRing.position.set(state.ballPos.x, 0.06, state.ballPos.z);
+  addressRing.scale.setScalar(1 + Math.sin(now * 0.005) * 0.06);
+
+  ballBeacon.position.set(state.ballPos.x, 0.08, state.ballPos.z);
+  const pulse = 1 + Math.sin(now * 0.006) * 0.22;
+  ballBeacon.scale.set(pulse, pulse, 1);
+  ballBeacon.visible = state.mode === 'walk' && state.ballAtRest;
+
+  renderer.render(scene, camera);
+}
+
+// Handle Window Resize
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Initialize World & Start Loop on Window Load
+window.onload = function() {
+  buildCourse();
+  buildClubhouse();
+  buildGolfCart();
+  renderClubSelector();
+  updateHUD();
+  animate();
+};
+</script>
+</body>
+</html>

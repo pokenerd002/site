@@ -1,0 +1,3583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homestead 3D - Open-World First-Person Farming Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            box-sizing: border-box;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+        }
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .crosshair {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            width: 18px;
+            height: 18px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 20;
+            transition: transform 0.1s ease;
+        }
+        .crosshair::before, .crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.92);
+            box-shadow: 0 0 3px rgba(0, 0, 0, 0.85);
+            border-radius: 2px;
+        }
+        .crosshair::before { top: 8px; left: 0; width: 18px; height: 2px; }
+        .crosshair::after { top: 0; left: 8px; width: 2px; height: 18px; }
+        .crosshair.active { transform: translate(-50%, -50%) scale(1.35); }
+        .crosshair.active::before, .crosshair.active::after { background: #fde047; }
+
+        .hud-glass {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .hotbar-slot {
+            transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .hotbar-slot.selected {
+            transform: translateY(-6px) scale(1.06);
+            border-color: #facc15;
+            background: rgba(250, 204, 21, 0.24);
+            box-shadow: 0 8px 20px -4px rgba(250, 204, 21, 0.35);
+        }
+        @keyframes slideUpFade {
+            0% { opacity: 0; transform: translate(-50%, 16px); }
+            15% { opacity: 1; transform: translate(-50%, 0); }
+            85% { opacity: 1; transform: translate(-50%, 0); }
+            100% { opacity: 0; transform: translate(-50%, -10px); }
+        }
+        .toast-anim {
+            animation: slideUpFade 2.6s ease forwards;
+        }
+    </style>
+</head>
+<body>
+    <!-- 3D Render Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Sleep Transition Overlay -->
+    <div id="sleep-overlay" class="fixed inset-0 bg-slate-950 pointer-events-none opacity-0 transition-opacity duration-500 z-40 flex items-center justify-center">
+        <div class="text-white text-2xl font-extrabold tracking-wide">🌅 Sleeping until 07:00 AM... Crew working overnight shift!</div>
+    </div>
+
+    <!-- Center Crosshair -->
+    <div id="crosshair" class="crosshair"></div>
+
+    <!-- Contextual Interaction Prompt -->
+    <div id="interact-prompt" class="fixed top-[55%] left-1/2 -translate-x-1/2 pointer-events-none z-20 hidden">
+        <div class="hud-glass px-4 py-1.5 rounded-full text-white text-sm font-semibold tracking-wide shadow-lg flex items-center gap-2 border border-yellow-400/40">
+            <span id="prompt-key" class="bg-yellow-400 text-slate-900 font-extrabold px-2 py-0.5 rounded text-xs">LMB</span>
+            <span id="prompt-text">Till Soil</span>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 pointer-events-none z-30 flex flex-col items-center gap-2"></div>
+
+    <!-- Top HUD Bar -->
+    <div class="fixed top-3 left-3 right-3 flex flex-wrap justify-between items-start gap-2 pointer-events-none z-20">
+        <!-- Left Stats -->
+        <div class="flex flex-wrap items-center gap-2">
+            <div class="hud-glass px-3.5 py-2 rounded-2xl text-white shadow-xl flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 font-extrabold text-base">$</div>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Balance</div>
+                    <div id="hud-money" class="text-lg font-extrabold text-emerald-300 leading-tight">$250</div>
+                </div>
+            </div>
+
+            <div class="hud-glass px-3.5 py-2 rounded-2xl text-white shadow-xl flex items-center gap-2.5">
+                <div id="time-icon" class="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-300 text-base">☀️</div>
+                <div>
+                    <div id="hud-day" class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Day 1</div>
+                    <div id="hud-time" class="text-sm font-bold text-slate-100 leading-tight">08:00 AM</div>
+                </div>
+            </div>
+
+            <div class="hud-glass px-3.5 py-2 rounded-2xl text-white shadow-xl flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base">💧</div>
+                <div class="w-20">
+                    <div class="flex justify-between text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">
+                        <span>Water</span>
+                        <span id="hud-water-pct">100%</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                        <div id="hud-water-bar" class="h-full bg-sky-400 transition-all duration-200" style="width: 100%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hud-glass px-3.5 py-2 rounded-2xl text-white shadow-xl hidden lg:flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-base">🧭</div>
+                <div>
+                    <div id="hud-zone" class="text-xs font-extrabold text-amber-300 leading-tight">Homestead Yard</div>
+                    <div id="hud-sub" class="text-[11px] text-slate-300 leading-tight">1/5 Fields • Clear Sky</div>
+                </div>
+            </div>
+
+            <div class="hud-glass px-3.5 py-2 rounded-2xl text-white shadow-xl flex items-center gap-2">
+                <span class="text-base">👷</span>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Crew [H]</div>
+                    <div id="hud-crew" class="text-xs font-extrabold text-sky-300 leading-tight">0/6 Hired</div>
+                </div>
+            </div>
+
+            <div id="buff-pill" class="hud-glass px-3 py-2 rounded-2xl text-white shadow-xl hidden items-center gap-2 border border-orange-400/50">
+                <span class="text-base">🍲</span>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wider text-orange-300 font-bold">Meal Speed</div>
+                    <div id="hud-buff-timer" class="text-xs font-extrabold text-white">01:30</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Stats: Inventory & Minimap -->
+        <div class="flex items-start gap-2.5">
+            <div class="hud-glass px-3 py-2 rounded-2xl text-white shadow-xl flex flex-wrap items-center gap-2">
+                <div class="flex items-center gap-1" title="Wheat"><span class="text-sm">🌾</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Wheat</div><div id="inv-wheat" class="text-xs font-extrabold text-amber-300">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Corn"><span class="text-sm">🌽</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Corn</div><div id="inv-corn" class="text-xs font-extrabold text-yellow-300">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Pumpkin"><span class="text-sm">🎃</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Pumpk</div><div id="inv-pumpkin" class="text-xs font-extrabold text-orange-400">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Sunflower"><span class="text-sm">🌻</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Sunflw</div><div id="inv-sunflower" class="text-xs font-extrabold text-amber-400">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Strawberry"><span class="text-sm">🍓</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Berry</div><div id="inv-strawberry" class="text-xs font-extrabold text-rose-400">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Orchard Fruit"><span class="text-sm">🍎</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Fruit</div><div id="inv-fruit" class="text-xs font-extrabold text-red-400">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Fresh Eggs"><span class="text-sm">🥚</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Eggs</div><div id="inv-eggs" class="text-xs font-extrabold text-amber-100">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Fresh Milk"><span class="text-sm">🥛</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Milk</div><div id="inv-milk" class="text-xs font-extrabold text-sky-200">0</div></div></div>
+                <div class="w-px h-5 bg-white/10"></div>
+                <div class="flex items-center gap-1" title="Artisan Bakery Goods"><span class="text-sm">🥧</span><div><div class="text-[8px] text-slate-400 uppercase font-bold">Baked</div><div id="inv-baked" class="text-xs font-extrabold text-orange-300">0</div></div></div>
+            </div>
+
+            <!-- Live World Radar Minimap -->
+            <div class="hud-glass p-1.5 rounded-2xl shadow-xl hidden sm:flex flex-col items-center">
+                <canvas id="minimap-canvas" width="128" height="128" class="rounded-xl bg-slate-950 border border-white/15"></canvas>
+                <div class="text-[9px] font-bold uppercase tracking-wider text-slate-400 mt-1">[B] Market • [M] Dealer • [H] Crew</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vehicle Driving HUD Banner -->
+    <div id="vehicle-hud" class="fixed top-20 left-1/2 -translate-x-1/2 hidden z-20 pointer-events-none">
+        <div class="hud-glass px-5 py-2.5 rounded-2xl border border-amber-400/50 text-white flex items-center gap-4 shadow-2xl">
+            <span id="vehicle-hud-icon" class="text-2xl">🚜</span>
+            <div>
+                <div id="vehicle-hud-title" class="text-xs font-extrabold uppercase tracking-wider text-amber-400">Utility Tractor Active</div>
+                <div class="text-xs text-slate-200">Press <span class="font-bold text-yellow-300">[C]</span> Camera View • Press <span class="font-bold text-yellow-300">[E]</span> to Exit</div>
+            </div>
+            <div class="w-24">
+                <div class="flex justify-between text-[10px] font-bold text-amber-300 mb-1">
+                    <span>⛽ FUEL</span>
+                    <span id="hud-fuel-pct">100%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div id="hud-fuel-bar" class="h-full bg-amber-400 transition-all duration-150" style="width: 100%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Hotbar -->
+    <div class="fixed bottom-3 left-1/2 -translate-x-1/2 z-20 pointer-events-none flex flex-col items-center gap-1.5 w-full max-w-3xl px-3">
+        <div id="active-tool-label" class="hud-glass px-3.5 py-1 rounded-full text-xs font-bold text-yellow-300 tracking-wide shadow">
+            1. Hand / Harvest & Interact
+        </div>
+        <div id="hotbar" class="hud-glass p-1.5 rounded-2xl flex items-center justify-center gap-1.5 shadow-2xl"></div>
+    </div>
+
+    <!-- MODAL 1: General Store, Seeds, Orchard Trees & Contracts -->
+    <div id="shop-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 text-white shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🏪</span>
+                    <div>
+                        <h2 class="text-xl font-extrabold text-white">Willowbrook Farmers Market & General Store</h2>
+                        <p class="text-xs text-slate-400">Sell crops, dairy, eggs & artisan goods, fulfill contracts, and buy seeds or orchard trees</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="shop-money" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1 rounded-xl font-extrabold text-sm">$250</span>
+                    <button onclick="closeModals()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+            </div>
+
+            <!-- Daily Crop Special + Sell All -->
+            <div class="mt-4 bg-slate-800/75 p-4 rounded-2xl border border-amber-500/30 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wider bg-amber-400 text-slate-950 px-2 py-0.5 rounded">Daily Special +40%</span>
+                        <span id="daily-special-label" class="text-sm font-bold text-amber-300">🌾 Wheat ($21 ea today!)</span>
+                    </div>
+                    <div id="shop-harvest-summary" class="text-xs text-slate-300 mt-1">No produce in inventory</div>
+                </div>
+                <button id="shop-sell-all-btn" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-sm transition shadow-lg">
+                    Sell All Goods ($0)
+                </button>
+            </div>
+
+            <!-- Town Delivery Contracts -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-sky-400 mb-2">Willowbrook Town Delivery Contracts</div>
+                <div id="contracts-list" class="grid grid-cols-1 md:grid-cols-2 gap-2.5"></div>
+            </div>
+
+            <!-- Seed Packets -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-slate-400 mb-2">Crop Seed Packets (Pack of 5)</div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <button onclick="buySeed('wheat', 5, 20)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-amber-400/50 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="text-xl mb-1">🌾</div><div class="font-bold text-sm text-white">Wheat Seeds x5</div><div class="text-[11px] text-slate-400">Fast growth • Base $15 ea</div></div>
+                        <div class="mt-2 text-xs font-extrabold text-emerald-400">$20</div>
+                    </button>
+                    <button onclick="buySeed('corn', 5, 45)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-yellow-400/50 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="text-xl mb-1">🌽</div><div class="font-bold text-sm text-white">Corn Seeds x5</div><div class="text-[11px] text-slate-400">Med growth • Base $30 ea</div></div>
+                        <div class="mt-2 text-xs font-extrabold text-emerald-400">$45</div>
+                    </button>
+                    <button onclick="buySeed('pumpkin', 5, 90)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-orange-400/50 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="text-xl mb-1">🎃</div><div class="font-bold text-sm text-white">Pumpkin Seeds x5</div><div class="text-[11px] text-slate-400">High value • Base $60 ea</div></div>
+                        <div class="mt-2 text-xs font-extrabold text-emerald-400">$90</div>
+                    </button>
+                    <button onclick="buySeed('sunflower', 5, 65)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-amber-300/50 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="text-xl mb-1">🌻</div><div class="font-bold text-sm text-white">Sunflower Seeds x5</div><div class="text-[11px] text-slate-400">Tall blooms • Base $45 ea</div></div>
+                        <div class="mt-2 text-xs font-extrabold text-emerald-400">$65</div>
+                    </button>
+                    <button onclick="buySeed('strawberry', 5, 75)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-rose-400/50 p-3 rounded-2xl text-left transition flex flex-col justify-between sm:col-span-2">
+                        <div><div class="text-xl mb-1">🍓</div><div class="font-bold text-sm text-white">Strawberry Starts x5 (Multi-Harvest!)</div><div class="text-[11px] text-slate-400">Regrows berries repeatedly after first harvest • Base $24 ea</div></div>
+                        <div class="mt-2 text-xs font-extrabold text-emerald-400">$75</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Orchard Fruit Trees -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-rose-400 mb-2">Homestead Orchard Fruit Trees (Permanent Regrowing Fruit)</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button id="buy-apple-tree-btn" onclick="buyOrchardTree('apple', 180)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-sm text-white">🍎 Honeycrisp Apple Tree</div>
+                            <div class="text-[11px] text-slate-400">Plants in your Homestead Orchard • Yields 3 Apples ($35 ea)</div>
+                        </div>
+                        <span id="apple-tree-count" class="text-xs font-extrabold text-emerald-400">$180 (0/3)</span>
+                    </button>
+                    <button id="buy-peach-tree-btn" onclick="buyOrchardTree('peach', 260)" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-sm text-white">🍑 Sunburst Peach Tree</div>
+                            <div class="text-[11px] text-slate-400">Plants in your Homestead Orchard • Yields 3 Peaches ($48 ea)</div>
+                        </div>
+                        <span id="peach-tree-count" class="text-xs font-extrabold text-emerald-400">$260 (0/3)</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: AgriTech Equipment Dealership, Livestock & Land Office -->
+    <div id="dealership-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 text-white shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🚜</span>
+                    <div>
+                        <h2 class="text-xl font-extrabold text-white">AgriTech Dealership, Livestock & Land Office</h2>
+                        <p class="text-xs text-slate-400">Buy vehicles, pro tools, chicken coop, dairy barn & farmland expansion deeds</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="dealer-money" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 px-3 py-1 rounded-xl font-extrabold text-sm">$250</span>
+                    <button onclick="closeModals()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+            </div>
+
+            <!-- Livestock Barns -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-orange-400 mb-2">Livestock Ranches & Pastures</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button id="buy-coop-btn" onclick="buyEquipment('coop')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-amber-400/50 p-3.5 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-2xl">🐔</span>
+                                <span id="price-coop" class="text-xs font-extrabold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-lg">$400</span>
+                            </div>
+                            <div class="font-bold text-sm text-white mt-2">Free-Range Chicken Coop</div>
+                            <div class="text-[11px] text-slate-400 mt-1">Spawns 5 roaming hens in your pasture! Collect Fresh Eggs ($22 ea or bake pies).</div>
+                        </div>
+                    </button>
+
+                    <button id="buy-dairy-btn" onclick="buyEquipment('dairy')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-sky-400/50 p-3.5 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-2xl">🐄</span>
+                                <span id="price-dairy" class="text-xs font-extrabold bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-lg">$950</span>
+                            </div>
+                            <div class="font-bold text-sm text-white mt-2">Dairy Cattle Barn & Pasture</div>
+                            <div class="text-[11px] text-slate-400 mt-1">Spawns 4 Holstein dairy cows! Collect Fresh Milk jugs ($45 ea or craft cakes).</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Vehicles & Heavy Machinery -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-amber-400 mb-2">Vehicles & Heavy Machinery (Spawns on Dealership Lot)</div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <button id="buy-pickup-btn" onclick="buyEquipment('pickup')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-sky-400/50 p-3.5 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center"><span class="text-2xl">🛻</span><span id="price-pickup" class="text-xs font-extrabold bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-lg">$450</span></div>
+                            <div class="font-bold text-sm text-white mt-2">Farm Utility Pickup</div>
+                            <div class="text-[11px] text-slate-400 mt-1">High-speed 4x4 truck for rapid travel across the valley & town!</div>
+                        </div>
+                    </button>
+                    <button id="buy-heavy-tractor-btn" onclick="buyEquipment('heavy_tractor')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-emerald-400/50 p-3.5 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center"><span class="text-2xl">🚜</span><span id="price-heavy-tractor" class="text-xs font-extrabold bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-lg">$650</span></div>
+                            <div class="font-bold text-sm text-white mt-2">GreenStar 8R Tractor</div>
+                            <div class="text-[11px] text-slate-400 mt-1">3-tile wide disc harrow that tills & harvests 3 rows at once!</div>
+                        </div>
+                    </button>
+                    <button id="buy-combine-btn" onclick="buyEquipment('combine')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 hover:border-amber-400/50 p-3.5 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div>
+                            <div class="flex justify-between items-center"><span class="text-2xl">🌾</span><span id="price-combine" class="text-xs font-extrabold bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-lg">$1,400</span></div>
+                            <div class="font-bold text-sm text-white mt-2">Titan X900 Combine</div>
+                            <div class="text-[11px] text-slate-400 mt-1">5-tile spinning header reel! Harvests massive swaths with +25% bonus yield!</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Upgraded Hand Tools & Automation -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-sky-400 mb-2">Pro Hand Tools & Field Automation</div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                    <button id="buy-tool-hoe-btn" onclick="buyEquipment('broad_hoe')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="font-bold text-xs text-white">⛏️ Steel Broad-Hoe</div><div class="text-[11px] text-slate-400 mt-0.5">Tills a 3x1 row in one swing</div></div>
+                        <div id="price-broad-hoe" class="mt-2 text-xs font-extrabold text-emerald-400">$120</div>
+                    </button>
+                    <button id="buy-tool-sprayer-btn" onclick="buyEquipment('sprayer')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="font-bold text-xs text-sky-300">💧 Brass 3x3 Sprayer</div><div class="text-[11px] text-slate-400 mt-0.5">Waters 3x3 area + 250L tank</div></div>
+                        <div id="price-sprayer" class="mt-2 text-xs font-extrabold text-emerald-400">$180</div>
+                    </button>
+                    <button id="buy-tool-scythe-btn" onclick="buyEquipment('scythe')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="font-bold text-xs text-amber-300">🗡️ Steel Scythe</div><div class="text-[11px] text-slate-400 mt-0.5">Harvests 3x3 ripe crops</div></div>
+                        <div id="price-scythe" class="mt-2 text-xs font-extrabold text-emerald-400">$200</div>
+                    </button>
+                    <button id="buy-tool-spreader-btn" onclick="buyEquipment('spreader')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex flex-col justify-between">
+                        <div><div class="font-bold text-xs text-lime-300">🌱 Turbo Seed Spreader</div><div class="text-[11px] text-slate-400 mt-0.5">Plants seeds in a 3x3 grid</div></div>
+                        <div id="price-spreader" class="mt-2 text-xs font-extrabold text-emerald-400">$250</div>
+                    </button>
+                    <button id="buy-sprinklers-btn" onclick="buyEquipment('sprinklers')" class="bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex flex-col justify-between sm:col-span-2">
+                        <div><div class="font-bold text-xs text-cyan-300">💦 Automated Field Sprinkler System</div><div class="text-[11px] text-slate-400 mt-0.5">Installs spinning brass sprinklers on all owned fields</div></div>
+                        <div id="price-sprinklers" class="mt-2 text-xs font-extrabold text-emerald-400">$500</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Farmland Expansion Deeds -->
+            <div class="mt-4">
+                <div class="text-xs uppercase tracking-wider font-bold text-lime-400 mb-2">Farmland Expansion Deeds</div>
+                <div id="dealer-fields-list" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: Willowbrook Grain & Bakery Crafting Mill -->
+    <div id="bakery-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-2xl w-full p-6 text-white shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">🥖</span>
+                    <div>
+                        <h2 class="text-xl font-extrabold text-white">Willowbrook Grain & Bakery Mill</h2>
+                        <p class="text-xs text-slate-400">Craft raw crops, eggs & milk into high-value artisan baked goods!</p>
+                    </div>
+                </div>
+                <button onclick="closeModals()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center transition">✕</button>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3" id="bakery-recipes-list"></div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: Farmhand Hiring & Crew Management Hall -->
+    <div id="crew-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-3xl w-full p-6 text-white shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">👷</span>
+                    <div>
+                        <h2 class="text-xl font-extrabold text-white">Willowbrook Hiring Hall & Crew Roster</h2>
+                        <p class="text-xs text-slate-400">Hire AI farmhands to walk your fields, till, plant, water, harvest & gather livestock goods</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span id="crew-wage-summary" class="bg-sky-500/20 border border-sky-500/40 text-sky-300 px-3 py-1 rounded-xl font-extrabold text-xs">Daily Payroll: $0/day</span>
+                    <button onclick="closeModals()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center justify-center transition">✕</button>
+                </div>
+            </div>
+
+            <div id="workers-list" class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3"></div>
+        </div>
+    </div>
+
+    <!-- Start / Pause Overlay -->
+    <div id="overlay-screen" class="fixed inset-0 bg-slate-950/75 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-slate-900/95 border border-slate-700/80 rounded-3xl max-w-lg w-full p-7 text-white shadow-2xl text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-emerald-500 text-3xl shadow-lg mb-4">
+                🏡
+            </div>
+            <h1 class="text-3xl font-extrabold tracking-tight text-white">Homestead 3D</h1>
+            <p class="text-sm text-slate-300 mt-1">Open-World First-Person Farming & Ranching Simulator</p>
+
+            <div class="mt-5 bg-slate-800/75 border border-slate-700/70 rounded-2xl p-4 text-left text-xs space-y-2 text-slate-200">
+                <div class="flex justify-between"><span class="text-slate-400 font-semibold">Move / Sprint / Jump</span><span class="font-bold text-white">W A S D  •  Shift  •  Space</span></div>
+                <div class="flex justify-between"><span class="text-slate-400 font-semibold">Farm / Harvest / Fish / Interact</span><span class="font-bold text-yellow-300">Left Click  or  E Key</span></div>
+                <div class="flex justify-between"><span class="text-slate-400 font-semibold">Vehicles (Drive / Camera View)</span><span class="font-bold text-amber-300">E Enter/Exit  •  C Cam Toggle</span></div>
+                <div class="flex justify-between"><span class="text-slate-400 font-semibold">Select Tool / Seeds</span><span class="font-bold text-white">Keys 1–8  or  Scroll Wheel</span></div>
+                <div class="flex justify-between"><span class="text-slate-400 font-semibold">Market / Dealer / Bakery / Crew</span><span class="font-bold text-emerald-400">B  •  M  •  G  •  H Keys</span></div>
+            </div>
+
+            <button id="play-btn" class="mt-6 w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-extrabold text-base tracking-wide shadow-xl transition transform hover:scale-[1.02] active:scale-[0.99]">
+                Click to Enter Valley
+            </button>
+            <p class="text-[11px] text-slate-400 mt-3">Explore your enterable Farmhouse, raise chickens & dairy cows, fish at the river dock, bake artisan goods, and hire AI farmhands!</p>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. PROCEDURAL WEB AUDIO ENGINE
+        // ==========================================
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.engineOsc = null;
+                this.engineGain = null;
+                this.baseEngineFreq = 38;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            }
+            playTill() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(135, now);
+                osc.frequency.exponentialRampToValueAtTime(38, now + 0.16);
+                gain.gain.setValueAtTime(0.28, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.18);
+            }
+            playPlant() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(340, now);
+                osc.frequency.exponentialRampToValueAtTime(540, now + 0.1);
+                gain.gain.setValueAtTime(0.18, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.11);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.11);
+            }
+            playWater() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const bufferSize = this.ctx.sampleRate * 0.24;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'bandpass';
+                filter.frequency.setValueAtTime(900, now);
+                filter.frequency.linearRampToValueAtTime(1600, now + 0.24);
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.24);
+                noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                noise.start(now);
+            }
+            playHarvest() {
+                this.init();
+                const now = this.ctx.currentTime;
+                [440, 587.33].forEach((f, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(f, now + idx * 0.06);
+                    gain.gain.setValueAtTime(0.2, now + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.06 + 0.14);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.06); osc.stop(now + idx * 0.06 + 0.14);
+                });
+            }
+            playDoor() {
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(190, now);
+                osc.frequency.linearRampToValueAtTime(130, now + 0.14);
+                gain.gain.setValueAtTime(0.22, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(now); osc.stop(now + 0.15);
+            }
+            playCoin() {
+                this.init();
+                const now = this.ctx.currentTime;
+                [987.77, 1318.51].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(f, now + i * 0.08);
+                    gain.gain.setValueAtTime(0.24, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.28);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.08); osc.stop(now + i * 0.08 + 0.28);
+                });
+            }
+            playFanfare() {
+                this.init();
+                const now = this.ctx.currentTime;
+                [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(f, now + i * 0.09);
+                    gain.gain.setValueAtTime(0.24, now + i * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.09 + 0.35);
+                    osc.connect(gain); gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.09); osc.stop(now + i * 0.09 + 0.35);
+                });
+            }
+            startEngine(baseFreq = 38) {
+                this.init();
+                this.stopEngine();
+                this.engineOsc = this.ctx.createOscillator();
+                this.engineGain = this.ctx.createGain();
+                const filter = this.ctx.createBiquadFilter();
+                this.engineOsc.type = 'sawtooth';
+                this.engineOsc.frequency.value = baseFreq;
+                this.baseEngineFreq = baseFreq;
+                filter.type = 'lowpass';
+                filter.frequency.value = 160;
+                this.engineGain.gain.value = 0.1;
+                this.engineOsc.connect(filter); filter.connect(this.engineGain); filter.connect(this.ctx.destination);
+                this.engineOsc.start();
+            }
+            updateEnginePitch(speedRatio) {
+                if (this.engineOsc && this.ctx) {
+                    this.engineOsc.frequency.setTargetAtTime(this.baseEngineFreq + speedRatio * 36, this.ctx.currentTime, 0.08);
+                }
+            }
+            stopEngine() {
+                if (this.engineOsc) {
+                    try { this.engineOsc.stop(); } catch (e) {}
+                    this.engineOsc.disconnect();
+                    this.engineOsc = null;
+                }
+            }
+        }
+        const sfx = new SoundFX();
+
+        // ==========================================
+        // 2. GAME STATE, CROPS, RECIPES & CONTRACTS
+        // ==========================================
+        const CROP_DATA = {
+            wheat: { name: 'Wheat', growTime: 16, sellPrice: 15, color: 0xfacc15, icon: '🌾', regrow: false },
+            corn: { name: 'Corn', growTime: 25, sellPrice: 30, color: 0xfde047, icon: '🌽', regrow: false },
+            pumpkin: { name: 'Pumpkin', growTime: 36, sellPrice: 60, color: 0xf97316, icon: '🎃', regrow: false },
+            sunflower: { name: 'Sunflower', growTime: 28, sellPrice: 45, color: 0xfbbf24, icon: '🌻', regrow: false },
+            strawberry: { name: 'Strawberry', growTime: 24, sellPrice: 24, color: 0xf43f5e, icon: '🍓', regrow: true }
+        };
+        const CROP_KEYS = Object.keys(CROP_DATA);
+
+        const BAKERY_RECIPES = [
+            { id: 'bread', name: 'Artisan Country Bread', icon: '🍞', sellPrice: 70, req: { wheat: 2, eggs: 1 }, desc: '2 Wheat + 1 Fresh Egg' },
+            { id: 'cornbread', name: 'Sweet Honey Cornbread', icon: '🧁', sellPrice: 115, req: { corn: 2, milk: 1, eggs: 1 }, desc: '2 Corn + 1 Milk + 1 Egg' },
+            { id: 'pumpkin_pie', name: 'Spiced Harvest Pumpkin Pie', icon: '🥧', sellPrice: 165, req: { pumpkin: 1, wheat: 1, eggs: 1 }, desc: '1 Pumpkin + 1 Wheat + 1 Egg' },
+            { id: 'shortcake', name: 'Strawberry Cream Shortcake', icon: '🍰', sellPrice: 205, req: { strawberry: 2, milk: 1, wheat: 1 }, desc: '2 Berries + 1 Milk + 1 Wheat' }
+        ];
+
+        const state = {
+            money: 250,
+            day: 1,
+            timeOfDay: 8.0,
+            weather: 'clear',
+            weatherTimer: 55,
+            water: 100,
+            maxWater: 100,
+            mealBuffTimer: 0,
+            dailySpecial: 'wheat',
+            contracts: [],
+            broadHoe: false,
+            sprayer: false,
+            scythe: false,
+            spreader: false,
+            sprinklers: false,
+            hasPickup: false,
+            hasHeavyTractor: false,
+            hasCombine: false,
+            hasCoop: false,
+            hasDairy: false,
+            selectedSlot: 0,
+            seeds: { wheat: 10, corn: 5, pumpkin: 3, sunflower: 3, strawberry: 3 },
+            harvest: { wheat: 0, corn: 0, pumpkin: 0, sunflower: 0, strawberry: 0 },
+            animalGoods: { eggs: 0, milk: 0 },
+            orchardFruit: { apple: 0, peach: 0 },
+            bakedGoods: { bread: 0, cornbread: 0, pumpkin_pie: 0, shortcake: 0 },
+            activeVehicle: null,
+            vehicleThirdPerson: false,
+            isLocked: false,
+            activeModal: null,
+            fishingCooldown: 0
+        };
+
+        function generateContracts() {
+            const templates = [
+                { title: 'Willowbrook Bakery Order', crop: 'wheat', qty: 8, reward: 220 },
+                { title: 'Sweetcorn Festival Supply', crop: 'corn', qty: 6, reward: 310 },
+                { title: 'Autumn Harvest Pie Crate', crop: 'pumpkin', qty: 4, reward: 390 },
+                { title: 'Town Square Florist', crop: 'sunflower', qty: 5, reward: 360 },
+                { title: 'Diner Fresh Jam Batch', crop: 'strawberry', qty: 8, reward: 320 }
+            ];
+            const shuffled = templates.sort(() => Math.random() - 0.5);
+            state.contracts = [shuffled[0], shuffled[1]];
+        }
+        generateContracts();
+
+        const HOTBAR_ITEMS = [
+            { id: 'hand', name: 'Hand / Harvest & Interact', icon: '✋', key: '1' },
+            { id: 'hoe', name: 'Iron Hoe (Till Soil)', icon: '⛏️', key: '2' },
+            { id: 'water', name: 'Watering Can', icon: '💧', key: '3' },
+            { id: 'seed_wheat', name: 'Wheat Seeds', icon: '🌾', key: '4', crop: 'wheat' },
+            { id: 'seed_corn', name: 'Corn Seeds', icon: '🌽', key: '5', crop: 'corn' },
+            { id: 'seed_pumpkin', name: 'Pumpkin Seeds', icon: '🎃', key: '6', crop: 'pumpkin' },
+            { id: 'seed_sunflower', name: 'Sunflower Seeds', icon: '🌻', key: '7', crop: 'sunflower' },
+            { id: 'seed_strawberry', name: 'Strawberry Starts', icon: '🍓', key: '8', crop: 'strawberry' }
+        ];
+
+        // ==========================================
+        // 3. THREE.JS SCENE, CAMERA & LIGHTING
+        // ==========================================
+        const canvas = document.getElementById('game-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.05;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.FogExp2(0x9bd4e4, 0.0042);
+
+        const camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 520);
+        camera.rotation.order = 'YXZ';
+
+        const player = {
+            pos: new THREE.Vector3(-4, 1.75, 16),
+            vel: new THREE.Vector3(),
+            yaw: 0,
+            pitch: 0,
+            height: 1.75,
+            onGround: true,
+            bobTimer: 0,
+            swingTimer: 0
+        };
+        camera.position.copy(player.pos);
+        scene.add(camera);
+
+        const hemiLight = new THREE.HemisphereLight(0xfffbeb, 0x3f6212, 0.78);
+        scene.add(hemiLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfff3d1, 1.3);
+        sunLight.position.set(65, 105, 55);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 10;
+        sunLight.shadow.camera.far = 300;
+        const d = 135;
+        sunLight.shadow.camera.left = -d;
+        sunLight.shadow.camera.right = d;
+        sunLight.shadow.camera.top = d;
+        sunLight.shadow.camera.bottom = -d;
+        sunLight.shadow.bias = -0.0004;
+        scene.add(sunLight);
+
+        const sunMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(8, 16, 16),
+            new THREE.MeshBasicMaterial({ color: 0xfef08a })
+        );
+        scene.add(sunMesh);
+
+        // ==========================================
+        // 4. PROCEDURAL PBR TEXTURES
+        // ==========================================
+        function createPBRGrassTextures() {
+            const size = 256;
+            const c = document.createElement('canvas');
+            const b = document.createElement('canvas');
+            c.width = c.height = b.width = b.height = size;
+            const ctx = c.getContext('2d');
+            const bctx = b.getContext('2d');
+
+            ctx.fillStyle = '#4a7c12';
+            ctx.fillRect(0, 0, size, size);
+            bctx.fillStyle = '#808080';
+            bctx.fillRect(0, 0, size, size);
+
+            for (let i = 0; i < 2200; i++) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                ctx.fillStyle = Math.random() > 0.5 ? '#365314' : '#65a30d';
+                ctx.globalAlpha = 0.35;
+                ctx.fillRect(x, y, 2, 4);
+                bctx.fillStyle = Math.random() > 0.5 ? '#a3a3a3' : '#525252';
+                bctx.globalAlpha = 0.28;
+                bctx.fillRect(x, y, 2, 4);
+            }
+            const flowerColors = ['#fef08a', '#ffffff', '#fbcfe8'];
+            for (let i = 0; i < 40; i++) {
+                ctx.fillStyle = flowerColors[i % flowerColors.length];
+                ctx.globalAlpha = 0.85;
+                ctx.beginPath();
+                ctx.arc(Math.random() * size, Math.random() * size, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const map = new THREE.CanvasTexture(c);
+            const bumpMap = new THREE.CanvasTexture(b);
+            map.wrapS = map.wrapT = bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+            map.repeat.set(130, 130);
+            bumpMap.repeat.set(130, 130);
+            return { map, bumpMap };
+        }
+
+        function createPBRDirtTextures(baseHex, lineHex, isFurrowed = false) {
+            const size = 256;
+            const c = document.createElement('canvas');
+            const b = document.createElement('canvas');
+            c.width = c.height = b.width = b.height = size;
+            const ctx = c.getContext('2d');
+            const bctx = b.getContext('2d');
+
+            ctx.fillStyle = baseHex;
+            ctx.fillRect(0, 0, size, size);
+            bctx.fillStyle = '#808080';
+            bctx.fillRect(0, 0, size, size);
+
+            if (isFurrowed) {
+                for (let y = 0; y < size; y += 24) {
+                    ctx.fillStyle = lineHex;
+                    ctx.fillRect(0, y, size, 10);
+                    bctx.fillStyle = '#262626';
+                    bctx.fillRect(0, y, size, 10);
+                    bctx.fillStyle = '#d4d4d4';
+                    bctx.fillRect(0, y + 10, size, 8);
+                }
+            }
+            for (let i = 0; i < 1400; i++) {
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                ctx.fillStyle = Math.random() > 0.5 ? lineHex : '#a16207';
+                ctx.globalAlpha = 0.22;
+                ctx.fillRect(x, y, 2, 2);
+                bctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#171717';
+                bctx.globalAlpha = 0.24;
+                bctx.fillRect(x, y, 2, 2);
+            }
+            const map = new THREE.CanvasTexture(c);
+            const bumpMap = new THREE.CanvasTexture(b);
+            map.wrapS = map.wrapT = bumpMap.wrapS = bumpMap.wrapT = THREE.RepeatWrapping;
+            return { map, bumpMap };
+        }
+
+        function createWoodPlankTexture(baseHex, grainHex) {
+            const c = document.createElement('canvas');
+            c.width = c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = baseHex;
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillStyle = grainHex;
+            for (let y = 0; y < 256; y += 32) ctx.fillRect(0, y, 256, 3);
+            for (let i = 0; i < 500; i++) {
+                ctx.globalAlpha = 0.14;
+                ctx.fillRect(Math.random() * 256, Math.random() * 256, 18, 1);
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createBrickTexture(baseHex, mortarHex) {
+            const c = document.createElement('canvas');
+            c.width = c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = mortarHex;
+            ctx.fillRect(0, 0, 256, 256);
+            ctx.fillStyle = baseHex;
+            for (let row = 0; row < 8; row++) {
+                const y = row * 32;
+                const offset = (row % 2) * 32;
+                for (let col = -1; col < 5; col++) {
+                    ctx.fillRect(col * 64 + offset + 2, y + 2, 60, 28);
+                }
+            }
+            const tex = new THREE.CanvasTexture(c);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(3, 2);
+            return tex;
+        }
+
+        const grassPBR = createPBRGrassTextures();
+        const dirtPBR = createPBRDirtTextures('#854d0e', '#5c3208', false);
+        const tilledPBR = createPBRDirtTextures('#6b3410', '#3f1a04', true);
+        const wateredPBR = createPBRDirtTextures('#361806', '#1c0b02', true);
+        const asphaltPBR = createPBRDirtTextures('#334155', '#1e293b', false);
+        asphaltPBR.map.repeat.set(8, 35);
+
+        const barnWoodTex = createWoodPlankTexture('#b91c1c', '#7f1d1d');
+        const naturalWoodTex = createWoodPlankTexture('#92400e', '#451a03');
+        const floorWoodTex = createWoodPlankTexture('#b45309', '#78350f');
+        floorWoodTex.repeat.set(4, 4);
+        const brickTex = createBrickTexture('#991b1b', '#cbd5e1');
+
+        // ==========================================
+        // 5. OPEN-WORLD 460x460 TERRAIN, RIVER, BRIDGES & ROADS
+        // ==========================================
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(460, 460),
+            new THREE.MeshStandardMaterial({
+                map: grassPBR.map,
+                bumpMap: grassPBR.bumpMap,
+                bumpScale: 0.18,
+                roughness: 0.88
+            })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const roadMat = new THREE.MeshStandardMaterial({
+            map: asphaltPBR.map,
+            bumpMap: asphaltPBR.bumpMap,
+            bumpScale: 0.08,
+            roughness: 0.88
+        });
+
+        function addRoad(x, z, w, d) {
+            const road = new THREE.Mesh(new THREE.PlaneGeometry(w, d), roadMat);
+            road.rotation.x = -Math.PI / 2;
+            road.position.set(x, 0.02, z);
+            road.receiveShadow = true;
+            scene.add(road);
+        }
+
+        // Expanded Valley Road Network
+        addRoad(0, 4, 6.2, 118);        // North-South Farm Spine
+        addRoad(32, 14, 186, 6.8);      // East-West Highway (Dealership -> Farm -> Bridge -> Willowbrook Town)
+        addRoad(18, -32, 140, 5.5);     // North Valley Bypass Road & North River Bridge
+        addRoad(-24, 38, 66, 5.5);      // South Pasture & Orchard Access Road
+        addRoad(94, 14, 7.8, 130);      // Willowbrook Main Street
+        addRoad(118, 14, 52, 6.8);      // Willowbrook Town Square Avenue
+
+        // River at X = 58 (with Twin Bridges at Z = 14 and Z = -32)
+        const riverMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.14, metalness: 0.35 });
+        const river = new THREE.Mesh(new THREE.PlaneGeometry(16, 460), riverMat);
+        river.rotation.x = -Math.PI / 2;
+        river.position.set(58, 0.04, 0);
+        scene.add(river);
+
+        function buildRiverBridge(bz) {
+            const bx = 58;
+            const bridge = new THREE.Group();
+            bridge.position.set(bx, 0, bz);
+
+            const deck = new THREE.Mesh(
+                new THREE.BoxGeometry(19, 0.45, 8.2),
+                new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.8 })
+            );
+            deck.position.y = 0.22;
+            deck.receiveShadow = true;
+            bridge.add(deck);
+
+            const railMat = new THREE.MeshStandardMaterial({ color: 0x475569, roughness: 0.6 });
+            [-3.9, 3.9].forEach(rz => {
+                const rail = new THREE.Mesh(new THREE.BoxGeometry(19, 0.22, 0.22), railMat);
+                rail.position.set(0, 1.15, rz);
+                bridge.add(rail);
+                for (let px = -8.5; px <= 8.5; px += 4.25) {
+                    const post = new THREE.Mesh(new THREE.BoxGeometry(0.28, 1.2, 0.28), railMat);
+                    post.position.set(px, 0.65, rz);
+                    bridge.add(post);
+                }
+            });
+            scene.add(bridge);
+        }
+        buildRiverBridge(14);
+        buildRiverBridge(-32);
+
+        // Riverside Wooden Fishing Dock at (X = 48.5, Z = 32)
+        const colliders = [];
+        const interactables = [];
+        function addBoxCollider(x, z, w, d) {
+            colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+        }
+
+        function buildFishingDock() {
+            const dx = 49.5, dz = 32;
+            const dock = new THREE.Group();
+            dock.position.set(dx, 0, dz);
+
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.82 });
+            const pier = new THREE.Mesh(new THREE.BoxGeometry(6.5, 0.3, 3.2), woodMat);
+            pier.position.set(1.5, 0.28, 0);
+            pier.receiveShadow = true;
+            dock.add(pier);
+
+            // Wooden Pilings & Fishing Rod Stand
+            [[-1.2, -1.4], [4.2, -1.4], [-1.2, 1.4], [4.2, 1.4]].forEach(([px, pz]) => {
+                const piling = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 1.4, 8), woodMat);
+                piling.position.set(px, 0.5, pz);
+                dock.add(piling);
+            });
+
+            const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 2.8, 6), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+            rod.position.set(4.2, 1.35, -0.8);
+            rod.rotation.z = -0.65;
+            dock.add(rod);
+
+            const sc = document.createElement('canvas');
+            sc.width = 256; sc.height = 64;
+            const ctx = sc.getContext('2d');
+            ctx.fillStyle = '#0369a1'; ctx.fillRect(0, 0, 256, 64);
+            ctx.fillStyle = '#ffffff'; ctx.font = 'bold 22px Inter, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🎣 FISHING PIER', 128, 40);
+            const sign = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.55, 0.12), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+            sign.position.set(-1.4, 1.35, -1.4);
+            sign.rotation.y = Math.PI / 2;
+            dock.add(sign);
+
+            const hit = new THREE.Mesh(new THREE.BoxGeometry(6.8, 2.2, 3.6), new THREE.MeshBasicMaterial({ visible: false }));
+            hit.position.set(1.5, 1.1, 0);
+            hit.userData = { type: 'fishing_dock' };
+            dock.add(hit);
+            interactables.push(hit);
+
+            scene.add(dock);
+        }
+        buildFishingDock();
+
+        // Perimeter Rolling Hills
+        const hillMat = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.95 });
+        [
+            [-175, -175, 65, 34], [0, -195, 78, 38], [185, -175, 68, 36],
+            [-195, 15, 68, 32], [205, 20, 68, 34], [-170, 185, 65, 32], [180, 185, 68, 34]
+        ].forEach(([x, z, r, h]) => {
+            const hill = new THREE.Mesh(new THREE.ConeGeometry(r, h, 20), hillMat);
+            hill.position.set(x, h * 0.45, z);
+            scene.add(hill);
+        });
+
+        // Clouds
+        const clouds = [];
+        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, flatShading: true });
+        for (let i = 0; i < 30; i++) {
+            const cloudGroup = new THREE.Group();
+            const puffs = 3 + Math.floor(Math.random() * 4);
+            for (let p = 0; p < puffs; p++) {
+                const puff = new THREE.Mesh(new THREE.DodecahedronGeometry(3.5 + Math.random() * 2.5, 1), cloudMat);
+                puff.position.set(p * 3.2, Math.random() * 1.1, (Math.random() - 0.5) * 2.5);
+                cloudGroup.add(puff);
+            }
+            cloudGroup.position.set((Math.random() - 0.5) * 420, 46 + Math.random() * 16, (Math.random() - 0.5) * 420);
+            scene.add(cloudGroup);
+            clouds.push(cloudGroup);
+        }
+
+        // ==========================================
+        // 6. PARTICLE & RAIN SYSTEM
+        // ==========================================
+        const particles = [];
+        const particleGeom = new THREE.BoxGeometry(0.11, 0.11, 0.11);
+
+        function spawnBurst(pos, colorHex, count = 12, speed = 3.5) {
+            const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+            for (let i = 0; i < count; i++) {
+                const m = new THREE.Mesh(particleGeom, mat);
+                m.position.copy(pos);
+                m.position.x += (Math.random() - 0.5) * 0.8;
+                m.position.y += 0.25 + Math.random() * 0.4;
+                m.position.z += (Math.random() - 0.5) * 0.8;
+                scene.add(m);
+                particles.push({
+                    mesh: m,
+                    vel: new THREE.Vector3((Math.random() - 0.5) * speed, 1.8 + Math.random() * speed, (Math.random() - 0.5) * speed),
+                    life: 0.65 + Math.random() * 0.35
+                });
+            }
+        }
+
+        const rainCount = 550;
+        const rainGeo = new THREE.BufferGeometry();
+        const rainPositions = new Float32Array(rainCount * 3);
+        for (let i = 0; i < rainCount * 3; i += 3) {
+            rainPositions[i] = (Math.random() - 0.5) * 90;
+            rainPositions[i + 1] = Math.random() * 28;
+            rainPositions[i + 2] = (Math.random() - 0.5) * 90;
+        }
+        rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+        const rainLines = new THREE.Points(
+            rainGeo,
+            new THREE.PointsMaterial({ color: 0xbae6fd, size: 0.22, transparent: true, opacity: 0.75 })
+        );
+        rainLines.visible = false;
+        scene.add(rainLines);
+
+        // ==========================================
+        // 7. ENTERABLE FARMHOUSE, BARN, FUEL PUMP, DEALERSHIP & WILLOWBROOK TOWN
+        // ==========================================
+        const streetLamps = [];
+        let houseDoorPivot = null;
+        let houseDoorOpen = false;
+        let fireplaceLight = null;
+
+        // --- Enterable Multi-Room Farmhouse at (-14, 0, 26) ---
+        function buildEnterableFarmhouse() {
+            const hx = -14, hz = 26;
+            const house = new THREE.Group();
+            house.position.set(hx, 0, hz);
+
+            const creamWall = new THREE.MeshStandardMaterial({ color: 0xfef3c7, roughness: 0.75 });
+            const interiorWall = new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.85 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x7c2d12, roughness: 0.8 });
+            const floorMat = new THREE.MeshStandardMaterial({ map: floorWoodTex, roughness: 0.7 });
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.8 });
+
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(10, 0.24, 9), floorMat);
+            floor.position.set(0, 0.12, 0);
+            floor.receiveShadow = true;
+            house.add(floor);
+
+            const porch = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.22, 2.4), woodMat);
+            porch.position.set(0, 0.11, -5.6);
+            porch.receiveShadow = true;
+            house.add(porch);
+
+            function addWall(x, y, z, w, h, d, mat = creamWall) {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+                m.position.set(x, y, z);
+                m.castShadow = true;
+                m.receiveShadow = true;
+                house.add(m);
+            }
+
+            addWall(0, 2.2, 4.4, 10, 4.2, 0.28);
+            addWall(-4.9, 2.2, 0, 0.28, 4.2, 9.0);
+            addWall(4.9, 2.2, 0, 0.28, 4.2, 9.0);
+            addWall(-3.0, 2.2, -4.4, 3.8, 4.2, 0.28);
+            addWall(3.0, 2.2, -4.4, 3.8, 4.2, 0.28);
+            addWall(0, 3.65, -4.4, 2.4, 1.3, 0.28);
+            addWall(0.6, 2.2, 2.1, 0.22, 4.2, 4.6, interiorWall);
+
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(7.8, 3.2, 4), roofMat);
+            roof.position.set(0, 5.8, 0);
+            roof.rotation.y = Math.PI / 4;
+            roof.scale.set(1.05, 1, 0.95);
+            roof.castShadow = true;
+            house.add(roof);
+
+            houseDoorPivot = new THREE.Group();
+            houseDoorPivot.position.set(-1.1, 0.24, -4.4);
+            const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(2.15, 2.75, 0.14), woodMat);
+            doorPanel.position.set(1.08, 1.38, 0);
+            doorPanel.castShadow = true;
+            doorPanel.userData = { type: 'house_door' };
+            houseDoorPivot.add(doorPanel);
+            interactables.push(doorPanel);
+            house.add(houseDoorPivot);
+
+            const hearth = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.4, 2.2), new THREE.MeshStandardMaterial({ color: 0x57534e, roughness: 0.9 }));
+            hearth.position.set(-4.1, 1.3, -1.8);
+            house.add(hearth);
+
+            const fireGlow = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, 1.0), new THREE.MeshBasicMaterial({ color: 0xf97316 }));
+            fireGlow.position.set(-3.45, 0.7, -1.8);
+            house.add(fireGlow);
+
+            fireplaceLight = new THREE.PointLight(0xfb923c, 1.1, 12);
+            fireplaceLight.position.set(hx - 2.8, 1.5, hz - 1.8);
+            scene.add(fireplaceLight);
+
+            const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.4), new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.9 }));
+            rug.rotation.x = -Math.PI / 2;
+            rug.position.set(-1.8, 0.25, -1.8);
+            house.add(rug);
+
+            const kitchenCounter = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.05, 1.1), woodMat);
+            kitchenCounter.position.set(-2.4, 0.72, 3.6);
+            kitchenCounter.userData = { type: 'house_kitchen' };
+            house.add(kitchenCounter);
+            interactables.push(kitchenCounter);
+
+            const stewPot = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.24, 0.26, 12), new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.6 }));
+            stewPot.position.set(-2.4, 1.38, 3.6);
+            stewPot.userData = { type: 'house_kitchen' };
+            house.add(stewPot);
+            interactables.push(stewPot);
+
+            const bedFrame = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.55, 3.2), woodMat);
+            bedFrame.position.set(3.2, 0.48, 2.4);
+            bedFrame.userData = { type: 'house_bed' };
+            house.add(bedFrame);
+            interactables.push(bedFrame);
+
+            const mattress = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.35, 3.0), new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.8 }));
+            mattress.position.set(3.2, 0.88, 2.4);
+            mattress.userData = { type: 'house_bed' };
+            house.add(mattress);
+            interactables.push(mattress);
+
+            const pillow = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.65), new THREE.MeshStandardMaterial({ color: 0xf8fafc }));
+            pillow.position.set(3.2, 1.12, 3.4);
+            house.add(pillow);
+
+            const desk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.9, 1.0), woodMat);
+            desk.position.set(3.4, 0.65, -2.5);
+            desk.userData = { type: 'house_pc' };
+            house.add(desk);
+            interactables.push(desk);
+
+            const monitor = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.55, 0.1), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+            monitor.position.set(3.4, 1.42, -2.5);
+            monitor.userData = { type: 'house_pc' };
+            house.add(monitor);
+            interactables.push(monitor);
+
+            const sc = document.createElement('canvas');
+            sc.width = 256; sc.height = 64;
+            const sctx = sc.getContext('2d');
+            sctx.fillStyle = '#451a03'; sctx.fillRect(0, 0, 256, 64);
+            sctx.fillStyle = '#fef3c7'; sctx.font = 'bold 22px Inter, sans-serif'; sctx.textAlign = 'center';
+            sctx.fillText('HOMESTEAD HOUSE', 128, 40);
+            const sign = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.55, 0.1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+            sign.position.set(0, 3.45, -4.62);
+            house.add(sign);
+
+            scene.add(house);
+
+            addBoxCollider(hx, hz + 4.4, 10.2, 0.45);
+            addBoxCollider(hx - 4.9, hz, 0.45, 9.2);
+            addBoxCollider(hx + 4.9, hz, 0.45, 9.2);
+            addBoxCollider(hx - 3.0, hz - 4.4, 3.7, 0.45);
+            addBoxCollider(hx + 3.0, hz - 4.4, 3.7, 0.45);
+            addBoxCollider(hx + 0.6, hz + 2.1, 0.35, 4.6);
+        }
+        buildEnterableFarmhouse();
+
+        // --- Classic Red Barn & Grain Silo at (-14, 0, -4) ---
+        function buildBarnAndSilo() {
+            const redWood = new THREE.MeshStandardMaterial({ map: barnWoodTex, roughness: 0.8 });
+            const whiteTrim = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.6 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.35, roughness: 0.65 });
+
+            const bx = -14, bz = -4;
+            const barnGroup = new THREE.Group();
+            barnGroup.position.set(bx, 0, bz);
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(9.5, 6.2, 13), redWood);
+            body.position.y = 3.1; body.castShadow = true; body.receiveShadow = true;
+            barnGroup.add(body);
+
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(7.2, 3.8, 4), roofMat);
+            roof.position.y = 8.1; roof.rotation.y = Math.PI / 4; roof.scale.set(1, 1, 1.38); roof.castShadow = true;
+            barnGroup.add(roof);
+
+            const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(0.3, 4.0, 3.8), whiteTrim);
+            doorFrame.position.set(4.8, 2.0, 0);
+            barnGroup.add(doorFrame);
+
+            const siloMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.5, roughness: 0.3 });
+            const silo = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 13, 20), siloMat);
+            silo.position.set(-1.5, 6.5, -8.8); silo.castShadow = true;
+            barnGroup.add(silo);
+
+            const siloDome = new THREE.Mesh(new THREE.SphereGeometry(2.2, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), siloMat);
+            siloDome.position.set(-1.5, 13, -8.8);
+            barnGroup.add(siloDome);
+
+            scene.add(barnGroup);
+            addBoxCollider(bx, bz, 9.8, 13.4);
+            addBoxCollider(bx - 1.5, bz - 8.8, 4.6, 4.6);
+        }
+        buildBarnAndSilo();
+
+        // --- Homestead Diesel Fuel Pump at (-5.5, 0, 10.5) ---
+        function buildFarmFuelPump() {
+            const fx = -5.5, fz = 10.5;
+            const g = new THREE.Group();
+            g.position.set(fx, 0, fz);
+
+            const pumpBody = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.85, 0.65), new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.4 }));
+            pumpBody.position.y = 0.92; pumpBody.castShadow = true;
+            g.add(pumpBody);
+
+            const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.75, 0.75, 2.2, 14), new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.5 }));
+            tank.rotation.z = Math.PI / 2;
+            tank.position.set(-1.6, 1.1, 0);
+            g.add(tank);
+
+            const hit = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.4, 2.4), new THREE.MeshBasicMaterial({ visible: false }));
+            hit.position.set(-0.6, 1.2, 0);
+            hit.userData = { type: 'fuel_pump' };
+            g.add(hit);
+            interactables.push(hit);
+
+            scene.add(g);
+            addBoxCollider(fx - 0.8, fz, 2.8, 1.4);
+        }
+        buildFarmFuelPump();
+
+        // --- Stone Water Trough & Water Tower at (-9.5, 0, 10.5) ---
+        function buildWaterTrough() {
+            const wx = -9.5, wz = 10.5;
+            const group = new THREE.Group();
+            group.position.set(wx, 0, wz);
+
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9 });
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.85 });
+            const waterMat = new THREE.MeshStandardMaterial({ color: 0x0ea5e9, roughness: 0.12, metalness: 0.25 });
+
+            const basin = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.05, 1.6), stoneMat);
+            basin.position.y = 0.52; basin.castShadow = true;
+            group.add(basin);
+
+            const waterSurface = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.2), waterMat);
+            waterSurface.rotation.x = -Math.PI / 2; waterSurface.position.y = 1.06;
+            group.add(waterSurface);
+
+            const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 2.6, 16), woodMat);
+            tank.position.set(-2.2, 5.2, 0);
+            group.add(tank);
+
+            const tankRoof = new THREE.Mesh(new THREE.ConeGeometry(1.75, 1.1, 16), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+            tankRoof.position.set(-2.2, 7.05, 0);
+            group.add(tankRoof);
+
+            [[-3.0, -0.8], [-1.4, -0.8], [-3.0, 0.8], [-1.4, 0.8]].forEach(([lx, lz]) => {
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.0, 0.22), woodMat);
+                leg.position.set(lx, 2.0, lz);
+                group.add(leg);
+            });
+
+            const hitMesh = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.0, 2.2), new THREE.MeshBasicMaterial({ visible: false }));
+            hitMesh.position.y = 1.0;
+            hitMesh.userData = { type: 'water_trough' };
+            group.add(hitMesh);
+            interactables.push(hitMesh);
+
+            scene.add(group);
+            addBoxCollider(wx - 0.8, wz, 3.8, 2.0);
+        }
+        buildWaterTrough();
+
+        // --- Roadside Farm Produce Stand at (14.5, 0, 9.5) ---
+        function buildFarmRoadsideStall() {
+            const x = 14.5, z = 9.5;
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            group.rotation.y = -Math.PI / 5;
+
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.85 });
+            const counter = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.15, 1.9), woodMat);
+            counter.position.y = 0.57; counter.castShadow = true;
+            group.add(counter);
+
+            [[-2.1, -0.8], [2.1, -0.8], [-2.1, 0.8], [2.1, 0.8]].forEach(([px, pz]) => {
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.9), woodMat);
+                post.position.set(px, 1.45, pz);
+                group.add(post);
+            });
+
+            const canopy = new THREE.Mesh(new THREE.BoxGeometry(5.0, 0.25, 2.4), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.7 }));
+            canopy.position.set(0, 2.9, 0); canopy.rotation.x = 0.12;
+            group.add(canopy);
+
+            const sc = document.createElement('canvas');
+            sc.width = 256; sc.height = 64;
+            const sctx = sc.getContext('2d');
+            sctx.fillStyle = '#fef3c7'; sctx.fillRect(0, 0, 256, 64);
+            sctx.strokeStyle = '#78350f'; sctx.lineWidth = 6; sctx.strokeRect(3, 3, 250, 58);
+            sctx.fillStyle = '#451a03'; sctx.font = 'bold 20px Inter, sans-serif'; sctx.textAlign = 'center';
+            sctx.fillText('MARKET & SEEDS', 128, 40);
+
+            const signBoard = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.68, 0.12), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+            signBoard.position.set(0, 2.55, 1.0);
+            group.add(signBoard);
+
+            const hitMesh = new THREE.Mesh(new THREE.BoxGeometry(4.8, 2.9, 2.4), new THREE.MeshBasicMaterial({ visible: false }));
+            hitMesh.position.y = 1.45;
+            hitMesh.userData = { type: 'market_stall' };
+            group.add(hitMesh);
+            interactables.push(hitMesh);
+
+            scene.add(group);
+            addBoxCollider(x, z, 3.8, 3.8);
+        }
+        buildFarmRoadsideStall();
+
+        // --- AgriTech Equipment Dealership at (-26, 0, 8) ---
+        function buildAgriTechDealership() {
+            const dx = -26, dz = 8;
+            const group = new THREE.Group();
+            group.position.set(dx, 0, dz);
+
+            const pad = new THREE.Mesh(new THREE.BoxGeometry(16, 0.16, 18), new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.85 }));
+            pad.position.set(2, 0.08, 0); pad.receiveShadow = true;
+            group.add(pad);
+
+            const steelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.5, roughness: 0.4 });
+            const accentMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.5 });
+
+            const mainHall = new THREE.Mesh(new THREE.BoxGeometry(7.5, 5.2, 12), steelMat);
+            mainHall.position.set(-2.5, 2.6, -2); mainHall.castShadow = true;
+            group.add(mainHall);
+
+            const awning = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.3, 12.4), accentMat);
+            awning.position.set(2.2, 4.6, -2);
+            group.add(awning);
+
+            const sc = document.createElement('canvas');
+            sc.width = 512; sc.height = 96;
+            const ctx = sc.getContext('2d');
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, 512, 96);
+            ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 8; ctx.strokeRect(4, 4, 504, 88);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 34px Inter, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('AGRITECH DEALERSHIP', 256, 44);
+            ctx.fillStyle = '#f8fafc'; ctx.font = '600 18px Inter, sans-serif';
+            ctx.fillText('VEHICLES • LIVESTOCK • TOOLS • DEEDS', 256, 76);
+
+            const banner = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.35, 7.6), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+            banner.position.set(3.4, 5.3, -2);
+            group.add(banner);
+
+            const counter = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.15, 3.2), new THREE.MeshStandardMaterial({ color: 0x334155 }));
+            counter.position.set(3.2, 0.65, -2);
+            group.add(counter);
+
+            const hitMesh = new THREE.Mesh(new THREE.BoxGeometry(2.6, 2.6, 4.2), new THREE.MeshBasicMaterial({ visible: false }));
+            hitMesh.position.set(3.0, 1.3, -2);
+            hitMesh.userData = { type: 'dealership' };
+            group.add(hitMesh);
+            interactables.push(hitMesh);
+
+            scene.add(group);
+            addBoxCollider(dx - 2.5, dz - 2, 7.6, 12.2);
+            addBoxCollider(dx + 3.2, dz - 2, 1.5, 3.3);
+        }
+        buildAgriTechDealership();
+
+        // --- WILLOWBROOK TOWN (General Store, Bakery Mill, Hiring Hall, Land Office, Clocktower) ---
+        function buildWillowbrookTown() {
+            const brickMat = new THREE.MeshStandardMaterial({ map: brickTex, roughness: 0.82 });
+            const stoneMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.75 });
+            const slateRoof = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.7 });
+            const terracottaRoof = new THREE.MeshStandardMaterial({ color: 0x9a3412, roughness: 0.75 });
+
+            function makeTownBuilding(x, z, w, h, d, wallMat, roofMat, labelText, interactType = null) {
+                const g = new THREE.Group();
+                g.position.set(x, 0, z);
+
+                const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+                body.position.y = h / 2; body.castShadow = true; body.receiveShadow = true;
+                g.add(body);
+
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.5, d + 0.6), roofMat);
+                roof.position.y = h + 0.25;
+                g.add(roof);
+
+                if (labelText) {
+                    const c = document.createElement('canvas');
+                    c.width = 512; c.height = 96;
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, 512, 96);
+                    ctx.strokeStyle = '#facc15'; ctx.lineWidth = 6; ctx.strokeRect(4, 4, 504, 88);
+                    ctx.fillStyle = '#fef08a'; ctx.font = 'bold 28px Inter, sans-serif'; ctx.textAlign = 'center';
+                    ctx.fillText(labelText, 256, 58);
+
+                    const sign = new THREE.Mesh(new THREE.BoxGeometry(w * 0.76, 1.1, 0.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+                    sign.position.set(0, h - 1.2, d / 2 + 0.12);
+                    g.add(sign);
+                }
+
+                if (interactType) {
+                    const hit = new THREE.Mesh(new THREE.BoxGeometry(w + 1.5, 3.5, d + 2.5), new THREE.MeshBasicMaterial({ visible: false }));
+                    hit.position.y = 1.75;
+                    hit.userData = { type: interactType };
+                    g.add(hit);
+                    interactables.push(hit);
+                }
+
+                scene.add(g);
+                addBoxCollider(x, z, w + 0.4, d + 0.4);
+            }
+
+            // Welcome Archway
+            const arch = new THREE.Group();
+            arch.position.set(72, 0, 14);
+            const postMat = new THREE.MeshStandardMaterial({ map: brickTex });
+            [-4.2, 4.2].forEach(pz => {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.9, 5.2, 0.9), postMat);
+                p.position.set(0, 2.6, pz);
+                arch.add(p);
+            });
+            const ac = document.createElement('canvas');
+            ac.width = 512; ac.height = 96;
+            const actx = ac.getContext('2d');
+            actx.fillStyle = '#14532d'; actx.fillRect(0, 0, 512, 96);
+            actx.strokeStyle = '#fde047'; actx.lineWidth = 6; actx.strokeRect(4, 4, 504, 88);
+            actx.fillStyle = '#ffffff'; actx.font = 'bold 30px Inter, sans-serif'; actx.textAlign = 'center';
+            actx.fillText('WELCOME TO WILLOWBROOK', 256, 58);
+            const banner = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.2, 9.2), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(ac) }));
+            banner.position.set(0, 5.2, 0);
+            arch.add(banner);
+            scene.add(arch);
+
+            // Town Buildings
+            makeTownBuilding(108, 2, 13, 6.2, 10, brickMat, slateRoof, 'WILLOWBROOK GENERAL STORE', 'market_stall');
+            makeTownBuilding(128, 3, 12, 6.8, 10, stoneMat, terracottaRoof, 'TOWN LAND & EQUIP OFFICE', 'dealership');
+            makeTownBuilding(82, -3, 10, 5.4, 9, stoneMat, terracottaRoof, 'GRAIN & BAKERY MILL', 'bakery_mill');
+            makeTownBuilding(82, 31, 11, 5.6, 9, brickMat, slateRoof, 'WILLOWBROOK HIRING HALL', 'hiring_hall');
+            makeTownBuilding(116, 31, 14, 8.5, 11, brickMat, slateRoof, 'WILLOWBROOK TOWN HALL', null);
+
+            const clockSpire = new THREE.Mesh(new THREE.BoxGeometry(3.5, 6, 3.5), brickMat);
+            clockSpire.position.set(116, 11.5, 31);
+            scene.add(clockSpire);
+
+            // Town Square Fountain
+            const fountainBase = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.85, 20), new THREE.MeshStandardMaterial({ color: 0x94a3b8 }));
+            fountainBase.position.set(106, 0.42, 14);
+            scene.add(fountainBase);
+            const fountainWater = new THREE.Mesh(new THREE.CylinderGeometry(3.0, 3.0, 0.9, 20), riverMat);
+            fountainWater.position.set(106, 0.44, 14);
+            scene.add(fountainWater);
+            addBoxCollider(106, 14, 6.8, 6.8);
+
+            // Streetlamps
+            const lampPositions = [
+                [24, 10], [44, 10], [74, 10], [90, 10], [102, 10], [120, 10], [90, -10], [90, 28]
+            ];
+            const poleMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7 });
+            const bulbMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+            lampPositions.forEach(([lx, lz]) => {
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 4.6, 8), poleMat);
+                pole.position.set(lx, 2.3, lz); scene.add(pole);
+                const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), bulbMat);
+                bulb.position.set(lx, 4.7, lz); scene.add(bulb);
+                const pt = new THREE.PointLight(0xfde047, 0.0, 18);
+                pt.position.set(lx, 4.5, lz); scene.add(pt);
+                streetLamps.push(pt);
+            });
+        }
+        buildWillowbrookTown();
+
+        // --- Valley Trees ---
+        const treeCrowns = [];
+        function buildValleyTrees() {
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+            const leavesMat1 = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8 });
+            const leavesMat2 = new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.8 });
+
+            const treeCoords = [
+                [-52, -52], [-28, -58], [-8, -60], [22, -58], [44, -52], [46, -18],
+                [46, 48], [24, 54], [-6, 56], [-48, 52], [-56, 26], [-56, -12],
+                [74, -46], [74, 52], [136, -24], [146, 26], [128, 52]
+            ];
+            treeCoords.forEach(([tx, tz], idx) => {
+                const tree = new THREE.Group();
+                tree.position.set(tx, 0, tz);
+                tree.scale.setScalar(0.95 + (idx % 4) * 0.22);
+
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.65, 3.4, 8), trunkMat);
+                trunk.position.y = 1.7; trunk.castShadow = true;
+                tree.add(trunk);
+
+                const crownGroup = new THREE.Group();
+                crownGroup.position.y = 3.4;
+                const crown1 = new THREE.Mesh(new THREE.ConeGeometry(2.8, 4.4, 8), idx % 2 === 0 ? leavesMat1 : leavesMat2);
+                crown1.position.y = 1.2; crown1.castShadow = true;
+                crownGroup.add(crown1);
+                const crown2 = new THREE.Mesh(new THREE.ConeGeometry(2.1, 3.5, 8), leavesMat1);
+                crown2.position.y = 3.2;
+                crownGroup.add(crown2);
+
+                tree.add(crownGroup);
+                treeCrowns.push({ mesh: crownGroup, phase: idx * 0.9 });
+                scene.add(tree);
+                addBoxCollider(tx, tz, 1.5, 1.5);
+            });
+        }
+        buildValleyTrees();
+
+        // ==========================================
+        // 8. ORCHARD FRUIT TREES & LIVESTOCK PASTURES
+        // ==========================================
+        const orchardTrees = [];
+        const appleSlots = [[-24, 24], [-28, 24], [-32, 24]];
+        const peachSlots = [[-24, 30], [-28, 30], [-32, 30]];
+
+        window.buyOrchardTree = function(type, cost) {
+            const slots = type === 'apple' ? appleSlots : peachSlots;
+            const currentCount = orchardTrees.filter(t => t.type === type).length;
+            if (currentCount >= slots.length) return showToast(`Maximum ${type} trees planted!`, 'text-amber-300');
+            if (state.money < cost) return showToast(`Need $${cost}!`, 'text-rose-400');
+
+            state.money -= cost;
+            const [tx, tz] = slots[currentCount];
+            const treeGroup = new THREE.Group();
+            treeGroup.position.set(tx, 0, tz);
+
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.4, 2.2, 8), new THREE.MeshStandardMaterial({ color: 0x5c3a21 }));
+            trunk.position.y = 1.1; trunk.castShadow = true;
+            treeGroup.add(trunk);
+
+            const canopy = new THREE.Mesh(new THREE.DodecahedronGeometry(1.75, 1), new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.75 }));
+            canopy.position.y = 2.8; canopy.castShadow = true;
+            treeGroup.add(canopy);
+
+            const fruitMeshes = [];
+            const fruitColor = type === 'apple' ? 0xdc2626 : 0xfb923c;
+            const fruitMat = new THREE.MeshStandardMaterial({ color: fruitColor, roughness: 0.35 });
+            [[-0.9, 2.4, 0.9], [0.9, 2.6, 0.8], [0, 2.3, -1.0]].forEach(([fx, fy, fz]) => {
+                const f = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), fruitMat);
+                f.position.set(fx, fy, fz);
+                treeGroup.add(f);
+                fruitMeshes.push(f);
+            });
+
+            const treeObj = { type, group: treeGroup, fruitMeshes, growth: 1.0, ripe: true };
+            const hit = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.6, 2.6), new THREE.MeshBasicMaterial({ visible: false }));
+            hit.position.y = 1.8;
+            hit.userData = { type: 'orchard_tree', tree: treeObj };
+            treeGroup.add(hit);
+            interactables.push(hit);
+
+            scene.add(treeGroup);
+            addBoxCollider(tx, tz, 1.0, 1.0);
+            orchardTrees.push(treeObj);
+
+            sfx.playFanfare();
+            showToast(`🌳 Planted ${type === 'apple' ? 'Apple' : 'Peach'} Tree in Homestead Orchard!`, 'text-lime-300');
+            updateHUD();
+        };
+
+        // Livestock Pastures & Animated Animals (Chickens at (-34, 46), Cows at (-12, 46))
+        const livestockAnimals = [];
+        let coopEggsReady = 0;
+        let barnMilkReady = 0;
+        let coopCrateMesh = null;
+        let dairyBucketMesh = null;
+
+        function buildChickenCoopAndPasture() {
+            const cx = -34, cz = 46;
+            const g = new THREE.Group();
+            g.position.set(cx, 0, cz);
+
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.8 });
+            const coop = new THREE.Mesh(new THREE.BoxGeometry(3.4, 2.4, 2.8), woodMat);
+            coop.position.set(-3.2, 1.2, -3.2); coop.castShadow = true;
+            g.add(coop);
+
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(2.6, 1.4, 4), new THREE.MeshStandardMaterial({ color: 0xb91c1c }));
+            roof.position.set(-3.2, 3.1, -3.2); roof.rotation.y = Math.PI / 4;
+            g.add(roof);
+
+            // Egg Collection Nest Box
+            coopCrateMesh = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.65, 0.9), new THREE.MeshStandardMaterial({ color: 0xfacc15 }));
+            coopCrateMesh.position.set(-1.0, 0.35, -3.5);
+            coopCrateMesh.userData = { type: 'collect_eggs' };
+            g.add(coopCrateMesh);
+            interactables.push(coopCrateMesh);
+
+            scene.add(g);
+            addBoxCollider(cx - 3.2, cz - 3.2, 3.6, 3.0);
+
+            // Spawn 5 Animated Chickens
+            const whiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const combMat = new THREE.MeshStandardMaterial({ color: 0xdc2626 });
+            for (let i = 0; i < 5; i++) {
+                const chick = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 10), whiteMat);
+                body.position.y = 0.32; chick.add(body);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), whiteMat);
+                head.position.set(0, 0.54, 0.18); chick.add(head);
+                const comb = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.12), combMat);
+                comb.position.set(0, 0.68, 0.18); chick.add(comb);
+
+                chick.position.set(cx + (Math.random() - 0.5) * 6, 0, cz + (Math.random() - 0.5) * 6);
+                scene.add(chick);
+                livestockAnimals.push({
+                    mesh: chick,
+                    center: new THREE.Vector3(cx, 0, cz),
+                    radius: 4.2,
+                    target: new THREE.Vector3(cx + 1, 0, cz + 1),
+                    speed: 1.4
+                });
+            }
+            coopEggsReady = 3;
+        }
+
+        function buildDairyBarnAndPasture() {
+            const dx = -12, dz = 46;
+            const g = new THREE.Group();
+            g.position.set(dx, 0, dz);
+
+            const redWood = new THREE.MeshStandardMaterial({ map: barnWoodTex, roughness: 0.8 });
+            const shed = new THREE.Mesh(new THREE.BoxGeometry(5.5, 3.6, 4.2), redWood);
+            shed.position.set(-4.2, 1.8, -3.5); shed.castShadow = true;
+            g.add(shed);
+
+            dairyBucketMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 0.85, 12), new THREE.MeshStandardMaterial({ color: 0x38bdf8, metalness: 0.4 }));
+            dairyBucketMesh.position.set(-0.6, 0.45, -3.8);
+            dairyBucketMesh.userData = { type: 'collect_milk' };
+            g.add(dairyBucketMesh);
+            interactables.push(dairyBucketMesh);
+
+            scene.add(g);
+            addBoxCollider(dx - 4.2, dz - 3.5, 5.7, 4.4);
+
+            // Spawn 4 Animated Holstein Dairy Cows
+            const cowWhite = new THREE.MeshStandardMaterial({ color: 0xf8fafc });
+            const cowSpot = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+            for (let i = 0; i < 4; i++) {
+                const cow = new THREE.Group();
+                const torso = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.9, 1.65), cowWhite);
+                torso.position.y = 0.95; torso.castShadow = true; cow.add(torso);
+                const spot = new THREE.Mesh(new THREE.BoxGeometry(0.98, 0.55, 0.65), cowSpot);
+                spot.position.set(0, 1.0, 0.1); cow.add(spot);
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), cowWhite);
+                head.position.set(0, 1.25, 0.95); cow.add(head);
+
+                cow.position.set(dx + (Math.random() - 0.5) * 7, 0, dz + (Math.random() - 0.5) * 7);
+                scene.add(cow);
+                livestockAnimals.push({
+                    mesh: cow,
+                    center: new THREE.Vector3(dx, 0, dz),
+                    radius: 5.5,
+                    target: new THREE.Vector3(dx + 2, 0, dz + 2),
+                    speed: 0.95
+                });
+            }
+            barnMilkReady = 2;
+        }
+
+        // ==========================================
+        // 9. 5 FARMLAND ESTATES (UP TO 280 PLOTS)
+        // ==========================================
+        const PLOT_SPACING = 2.65;
+        const plots = [];
+        const sprinklersList = [];
+
+        const plotGeom = new THREE.BoxGeometry(2.48, 0.14, 2.48);
+        const matUntilled = new THREE.MeshStandardMaterial({ map: dirtPBR.map, bumpMap: dirtPBR.bumpMap, bumpScale: 0.14, roughness: 0.95 });
+        const matTilled = new THREE.MeshStandardMaterial({ map: tilledPBR.map, bumpMap: tilledPBR.bumpMap, bumpScale: 0.22, roughness: 0.9 });
+        const matWatered = new THREE.MeshStandardMaterial({ map: wateredPBR.map, bumpMap: wateredPBR.bumpMap, bumpScale: 0.22, roughness: 0.6 });
+        const matLockedPlot = new THREE.MeshStandardMaterial({ color: 0x57534e, roughness: 0.95 });
+
+        const FIELDS = [
+            { id: 'field_1', name: 'Homestead Starter Field', rows: 6, cols: 6, center: new THREE.Vector3(6.5, 0, -4.5), price: 0, owned: true, signPos: null, signGroup: null },
+            { id: 'field_2', name: 'South Creek Plot (48 Tiles)', rows: 6, cols: 8, center: new THREE.Vector3(24.5, 0, 26.5), price: 350, owned: false, signPos: new THREE.Vector3(14.5, 0, 19.0), signGroup: null },
+            { id: 'field_3', name: 'West Valley Plot (64 Tiles)', rows: 8, cols: 8, center: new THREE.Vector3(-35.5, 0, -15.5), price: 800, owned: false, signPos: new THREE.Vector3(-22.5, 0, -15.5), signGroup: null },
+            { id: 'field_4', name: 'North Hilltop Estate (80 Tiles)', rows: 8, cols: 10, center: new THREE.Vector3(8.5, 0, -45.5), price: 1600, owned: false, signPos: new THREE.Vector3(-4.5, 0, -32.0), signGroup: null },
+            { id: 'field_5', name: 'Riverbend Mega-Farm (100 Tiles)', rows: 10, cols: 10, center: new THREE.Vector3(33.5, 0, -16.5), price: 3200, owned: false, signPos: new THREE.Vector3(19.5, 0, -16.5), signGroup: null }
+        ];
+
+        function createForSaleSign(field) {
+            if (!field.signPos) return;
+            const group = new THREE.Group();
+            group.position.copy(field.signPos);
+
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.85 });
+            const postL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.18), woodMat);
+            postL.position.set(-1.1, 1.2, 0); group.add(postL);
+            const postR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.18), woodMat);
+            postR.position.set(1.1, 1.2, 0); group.add(postR);
+
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 256;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = '#fef3c7'; ctx.fillRect(0, 0, 512, 256);
+            ctx.fillStyle = '#dc2626'; ctx.fillRect(16, 16, 480, 74);
+            ctx.fillStyle = '#ffffff'; ctx.font = '900 44px Inter, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('LAND FOR SALE', 256, 68);
+            ctx.fillStyle = '#1e293b'; ctx.font = 'bold 26px Inter, sans-serif';
+            ctx.fillText(field.name, 256, 138);
+            ctx.fillStyle = '#15803d'; ctx.font = '900 48px Inter, sans-serif';
+            ctx.fillText(`$${field.price.toLocaleString()}`, 256, 198);
+            ctx.fillStyle = '#475569'; ctx.font = '600 18px Inter, sans-serif';
+            ctx.fillText('Click [LMB] or Press [E] to Purchase Deed', 256, 234);
+
+            const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.35, 0.14), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c) }));
+            board.position.set(0, 1.75, 0); group.add(board);
+
+            const hitMesh = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.5, 0.8), new THREE.MeshBasicMaterial({ visible: false }));
+            hitMesh.position.set(0, 1.25, 0);
+            hitMesh.userData = { type: 'field_sign', field };
+            group.add(hitMesh);
+            interactables.push(hitMesh);
+
+            scene.add(group);
+            field.signGroup = group;
+        }
+
+        function createCropMesh(cropType, stage) {
+            const group = new THREE.Group();
+            const offsets = [[-0.55, -0.55], [0.55, -0.55], [0, 0], [-0.55, 0.55], [0.55, 0.55]];
+
+            if (stage === 1) {
+                const sproutMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.7 });
+                offsets.forEach(([ox, oz]) => {
+                    const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.35, 0.18), sproutMat);
+                    b1.position.set(ox, 0.18, oz); b1.rotation.z = 0.25; group.add(b1);
+                });
+            } else if (stage === 2 || stage === 3) {
+                const scaleH = stage === 2 ? 0.7 : 1.0;
+                const stalkMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.75 });
+                offsets.forEach(([ox, oz]) => {
+                    const h = (cropType === 'corn' || cropType === 'sunflower' ? 1.25 : 0.75) * scaleH;
+                    const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, h, 6), stalkMat);
+                    stalk.position.set(ox, h / 2, oz); group.add(stalk);
+                    const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.08, 0.22), stalkMat);
+                    leaf.position.set(ox, h * 0.65, oz); group.add(leaf);
+                });
+            } else if (stage === 4) {
+                if (cropType === 'wheat') {
+                    const goldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.55 });
+                    const stemMat = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.7 });
+                    for (let x = -0.75; x <= 0.75; x += 0.5) {
+                        for (let z = -0.75; z <= 0.75; z += 0.5) {
+                            const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.15, 5), stemMat);
+                            stalk.position.set(x, 0.57, z); group.add(stalk);
+                            const head = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.4, 0.14), goldMat);
+                            head.position.set(x, 1.16, z); head.rotation.z = 0.15; group.add(head);
+                        }
+                    }
+                } else if (cropType === 'corn') {
+                    const greenMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.7 });
+                    const cobMat = new THREE.MeshStandardMaterial({ color: 0xfde047, roughness: 0.35 });
+                    offsets.forEach(([ox, oz]) => {
+                        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 1.9, 7), greenMat);
+                        stalk.position.set(ox, 0.95, oz); group.add(stalk);
+                        const cob = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.44, 8), cobMat);
+                        cob.position.set(ox + 0.14, 1.18, oz); cob.rotation.z = -0.35; group.add(cob);
+                    });
+                } else if (cropType === 'pumpkin') {
+                    const pumpMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.45 });
+                    const stemMat = new THREE.MeshStandardMaterial({ color: 0x365314 });
+                    [[-0.5, -0.45], [0.52, -0.4], [0, 0.5]].forEach(([ox, oz]) => {
+                        const pumpkin = new THREE.Mesh(new THREE.SphereGeometry(0.36, 12, 10), pumpMat);
+                        pumpkin.scale.set(1.15, 0.85, 1.15); pumpkin.position.set(ox, 0.3, oz); group.add(pumpkin);
+                        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.16, 6), stemMat);
+                        stem.position.set(ox, 0.62, oz); group.add(stem);
+                    });
+                } else if (cropType === 'sunflower') {
+                    const stemMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.75 });
+                    const petalMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.5 });
+                    const centerMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9 });
+                    offsets.forEach(([ox, oz]) => {
+                        const stalk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.85, 7), stemMat);
+                        stalk.position.set(ox, 0.92, oz); group.add(stalk);
+                        const fh = new THREE.Group();
+                        fh.position.set(ox, 1.85, oz); fh.rotation.x = 0.25;
+                        const petals = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.06, 12), petalMat);
+                        petals.rotation.x = Math.PI / 2; fh.add(petals);
+                        const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.08, 12), centerMat);
+                        disc.rotation.x = Math.PI / 2; fh.add(disc);
+                        group.add(fh);
+                    });
+                } else if (cropType === 'strawberry') {
+                    const bushMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8 });
+                    const berryMat = new THREE.MeshStandardMaterial({ color: 0xf43f5e, roughness: 0.35 });
+                    offsets.forEach(([ox, oz]) => {
+                        const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.32, 1), bushMat);
+                        bush.scale.set(1.1, 0.75, 1.1); bush.position.set(ox, 0.22, oz); group.add(bush);
+                        for (let b = 0; b < 3; b++) {
+                            const angle = (b / 3) * Math.PI * 2;
+                            const berry = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.15, 7), berryMat);
+                            berry.rotation.x = Math.PI;
+                            berry.position.set(ox + Math.cos(angle) * 0.26, 0.24, oz + Math.sin(angle) * 0.26);
+                            group.add(berry);
+                        }
+                    });
+                }
+            }
+            return group;
+        }
+
+        FIELDS.forEach(field => {
+            createForSaleSign(field);
+            for (let r = 0; r < field.rows; r++) {
+                for (let c = 0; c < field.cols; c++) {
+                    const px = field.center.x + (c - (field.cols - 1) / 2) * PLOT_SPACING;
+                    const pz = field.center.z + (r - (field.rows - 1) / 2) * PLOT_SPACING;
+
+                    const mesh = new THREE.Mesh(plotGeom, field.owned ? matUntilled : matLockedPlot);
+                    mesh.position.set(px, 0.07, pz);
+                    mesh.receiveShadow = true;
+
+                    const plotObj = { field, row: r, col: c, mesh, state: 'untilled', moisture: 0, crop: null, growth: 0, stage: 0, cropMesh: null };
+                    mesh.userData = { type: 'plot', plot: plotObj };
+                    scene.add(mesh);
+                    interactables.push(mesh);
+                    plots.push(plotObj);
+                }
+            }
+        });
+
+        function updatePlotVisuals(plot) {
+            if (!plot.field.owned) { plot.mesh.material = matLockedPlot; return; }
+            if (plot.state === 'untilled') plot.mesh.material = matUntilled;
+            else if (plot.state === 'tilled') plot.mesh.material = matTilled;
+            else if (plot.state === 'watered') plot.mesh.material = matWatered;
+
+            if (!plot.crop) {
+                if (plot.cropMesh) { scene.remove(plot.cropMesh); plot.cropMesh = null; }
+                plot.stage = 0;
+                return;
+            }
+            const newStage = plot.growth >= 1 ? 4 : (plot.growth >= 0.65 ? 3 : (plot.growth >= 0.32 ? 2 : 1));
+            if (newStage !== plot.stage) {
+                plot.stage = newStage;
+                if (plot.cropMesh) scene.remove(plot.cropMesh);
+                plot.cropMesh = createCropMesh(plot.crop, newStage);
+                plot.cropMesh.position.set(plot.mesh.position.x, 0.14, plot.mesh.position.z);
+                scene.add(plot.cropMesh);
+            }
+        }
+
+        function installSprinklersOnOwnedFields() {
+            sprinklersList.forEach(s => scene.remove(s.group));
+            sprinklersList.length = 0;
+            if (!state.sprinklers) return;
+
+            const brassMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.7, roughness: 0.25 });
+            FIELDS.forEach(f => {
+                if (!f.owned) return;
+                [[-3.5, -3.5], [3.5, -3.5], [-3.5, 3.5], [3.5, 3.5]].forEach(([ox, oz]) => {
+                    const g = new THREE.Group();
+                    g.position.set(f.center.x + ox, 0.14, f.center.z + oz);
+                    const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.9, 8), brassMat);
+                    pipe.position.y = 0.45; g.add(pipe);
+                    const head = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.08, 0.08), brassMat);
+                    head.position.y = 0.92; g.add(head);
+                    scene.add(g);
+                    sprinklersList.push({ group: g, head });
+                });
+            });
+        }
+
+        window.buyField = function(fieldId) {
+            const field = FIELDS.find(f => f.id === fieldId);
+            if (!field || field.owned) return;
+            if (state.money < field.price) return showToast(`Need $${field.price.toLocaleString()} for ${field.name}!`, 'text-rose-400');
+
+            state.money -= field.price;
+            field.owned = true;
+            if (field.signGroup) {
+                spawnBurst(field.signGroup.position, 0xfacc15, 24, 5.5);
+                scene.remove(field.signGroup);
+                field.signGroup = null;
+            }
+            plots.forEach(p => { if (p.field === field) updatePlotVisuals(p); });
+            if (state.sprinklers) installSprinklersOnOwnedFields();
+            sfx.playFanfare();
+            showToast(`🎉 Purchased ${field.name}!`, 'text-lime-300');
+            updateHUD();
+        };
+
+        // ==========================================
+        // 10. DRIVEABLE VEHICLES WITH FUEL & REFUELING
+        // ==========================================
+        const vehicles = [];
+
+        function createVehicleInstance(type, spawnPos, heading = 0) {
+            const names = {
+                starter_tractor: 'Utility Tractor',
+                pickup: 'Farm Utility Pickup Truck',
+                heavy_tractor: 'GreenStar 8R Heavy Tractor',
+                combine: 'Titan X900 Combine Harvester'
+            };
+            const icons = { starter_tractor: '🚜', pickup: '🛻', heavy_tractor: '🚜', combine: '🌾' };
+
+            const v = {
+                type,
+                name: names[type],
+                icon: icons[type],
+                group: new THREE.Group(),
+                pos: spawnPos.clone(),
+                heading,
+                speed: 0,
+                fuel: 100,
+                maxFuel: 100,
+                maxSpeed: type === 'pickup' ? 24.0 : (type === 'heavy_tractor' ? 15.0 : (type === 'combine' ? 11.0 : 11.5)),
+                accel: type === 'pickup' ? 24.0 : (type === 'heavy_tractor' ? 18.0 : 13.5),
+                swathRadius: type === 'combine' ? 6.6 : (type === 'heavy_tractor' ? 4.2 : (type === 'starter_tractor' ? 2.15 : 0)),
+                cabOffset: type === 'combine' ? new THREE.Vector3(0, 3.35, -1.35)
+                    : (type === 'pickup' ? new THREE.Vector3(-0.45, 1.85, 0.1) : new THREE.Vector3(0, 2.55, 0.72)),
+                wheels: [],
+                steeringWheel: null,
+                reelMesh: null
+            };
+
+            const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6, metalness: 0.5 });
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.9 });
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.4 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.35, roughness: 0.1 });
+
+            function makeWheel(radius, width, x, y, z) {
+                const wGroup = new THREE.Group();
+                wGroup.position.set(x, y, z);
+                const tire = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, width, 18), tireMat);
+                tire.rotation.z = Math.PI / 2; tire.castShadow = true;
+                wGroup.add(tire);
+                const rim = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.55, radius * 0.55, width + 0.04, 12), rimMat);
+                rim.rotation.z = Math.PI / 2;
+                wGroup.add(rim);
+                v.group.add(wGroup);
+                v.wheels.push(wGroup);
+            }
+
+            if (type === 'pickup') {
+                const truckPaint = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3, metalness: 0.35 });
+                const bed = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.75, 4.8), truckPaint);
+                bed.position.set(0, 0.95, 0.2); bed.castShadow = true; v.group.add(bed);
+                const cab = new THREE.Mesh(new THREE.BoxGeometry(2.05, 1.05, 2.1), truckPaint);
+                cab.position.set(0, 1.8, -0.35); cab.castShadow = true; v.group.add(cab);
+                const windshield = new THREE.Mesh(new THREE.PlaneGeometry(1.85, 0.85), glassMat);
+                windshield.position.set(0, 1.85, -1.42); windshield.rotation.y = Math.PI; v.group.add(windshield);
+
+                makeWheel(0.56, 0.38, -1.05, 0.56, -1.45);
+                makeWheel(0.56, 0.38, 1.05, 0.56, -1.45);
+                makeWheel(0.56, 0.38, -1.05, 0.56, 1.55);
+                makeWheel(0.56, 0.38, 1.05, 0.56, 1.55);
+
+                const hitBox = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.4, 5.0), new THREE.MeshBasicMaterial({ visible: false }));
+                hitBox.position.set(0, 1.2, 0.2); hitBox.userData = { type: 'vehicle', vehicle: v };
+                v.group.add(hitBox); interactables.push(hitBox);
+            } else if (type === 'starter_tractor' || type === 'heavy_tractor') {
+                const isHeavy = type === 'heavy_tractor';
+                const bodyPaint = new THREE.MeshStandardMaterial({ color: isHeavy ? 0x15803d : 0xdc2626, roughness: 0.32, metalness: 0.3 });
+
+                const chassis = new THREE.Mesh(new THREE.BoxGeometry(isHeavy ? 1.95 : 1.7, 0.7, isHeavy ? 4.1 : 3.6), darkMetal);
+                chassis.position.set(0, 0.88, 0); chassis.castShadow = true; v.group.add(chassis);
+                const hood = new THREE.Mesh(new THREE.BoxGeometry(isHeavy ? 1.65 : 1.45, 1.0, isHeavy ? 2.3 : 2.0), bodyPaint);
+                hood.position.set(0, 1.55, -0.8); hood.castShadow = true; v.group.add(hood);
+
+                if (isHeavy) {
+                    const stripe = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.16, 2.32), rimMat);
+                    stripe.position.set(0, 1.75, -0.8); v.group.add(stripe);
+                }
+
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.24, 1.85), bodyPaint);
+                roof.position.set(0, 3.18, 0.9); v.group.add(roof);
+
+                [[-0.88, 0.2], [0.88, 0.2], [-0.88, 1.6], [0.88, 1.6]].forEach(([px, pz]) => {
+                    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.85, 0.12), darkMetal);
+                    pillar.position.set(px, 2.2, pz); v.group.add(pillar);
+                });
+
+                const steerGroup = new THREE.Group();
+                steerGroup.position.set(0, 1.85, 0.42); steerGroup.rotation.x = -0.5;
+                steerGroup.add(new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.035, 8, 18), darkMetal));
+                v.group.add(steerGroup); v.steeringWheel = steerGroup;
+
+                const implementBar = new THREE.Mesh(new THREE.BoxGeometry(isHeavy ? 8.2 : 4.8, 0.4, 0.65), bodyPaint);
+                implementBar.position.set(0, 0.45, 2.25); v.group.add(implementBar);
+
+                makeWheel(isHeavy ? 1.12 : 0.95, 0.6, -1.25, isHeavy ? 1.12 : 0.95, 1.05);
+                makeWheel(isHeavy ? 1.12 : 0.95, 0.6, 1.25, isHeavy ? 1.12 : 0.95, 1.05);
+                makeWheel(isHeavy ? 0.72 : 0.62, 0.44, -1.1, isHeavy ? 0.72 : 0.62, -1.3);
+                makeWheel(isHeavy ? 0.72 : 0.62, 0.44, 1.1, isHeavy ? 0.72 : 0.62, -1.3);
+
+                const hitBox = new THREE.Mesh(new THREE.BoxGeometry(2.6, 3.2, 4.4), new THREE.MeshBasicMaterial({ visible: false }));
+                hitBox.position.set(0, 1.6, 0.2); hitBox.userData = { type: 'vehicle', vehicle: v };
+                v.group.add(hitBox); interactables.push(hitBox);
+            } else if (type === 'combine') {
+                const combinePaint = new THREE.MeshStandardMaterial({ color: 0xeab308, roughness: 0.35, metalness: 0.25 });
+                const redHeader = new THREE.MeshStandardMaterial({ color: 0xb91c1c, roughness: 0.4 });
+
+                const mainBody = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.2, 5.2), combinePaint);
+                mainBody.position.set(0, 2.0, 0.6); mainBody.castShadow = true; v.group.add(mainBody);
+                const hopper = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.85, 3.2), darkMetal);
+                hopper.position.set(0, 3.45, 0.7); v.group.add(hopper);
+                const cab = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.85, 1.7), glassMat);
+                cab.position.set(0, 3.2, -1.35); v.group.add(cab);
+                const cabRoof = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.22, 1.9), combinePaint);
+                cabRoof.position.set(0, 4.18, -1.35); v.group.add(cabRoof);
+                const headerDeck = new THREE.Mesh(new THREE.BoxGeometry(11.6, 0.75, 1.3), redHeader);
+                headerDeck.position.set(0, 0.65, -2.7); v.group.add(headerDeck);
+
+                const reelGroup = new THREE.Group();
+                reelGroup.position.set(0, 1.05, -2.95);
+                const reelAxle = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 11.4, 10), darkMetal);
+                reelAxle.rotation.z = Math.PI / 2; reelGroup.add(reelAxle);
+                for (let b = 0; b < 6; b++) {
+                    const ang = (b / 6) * Math.PI * 2;
+                    const bar = new THREE.Mesh(new THREE.BoxGeometry(11.3, 0.06, 0.06), rimMat);
+                    bar.position.set(0, Math.sin(ang) * 0.42, Math.cos(ang) * 0.42);
+                    reelGroup.add(bar);
+                }
+                v.group.add(reelGroup); v.reelMesh = reelGroup;
+
+                makeWheel(1.25, 0.75, -1.65, 1.25, -0.7);
+                makeWheel(1.25, 0.75, 1.65, 1.25, -0.7);
+                makeWheel(0.75, 0.5, -1.45, 0.75, 2.2);
+                makeWheel(0.75, 0.5, 1.45, 0.75, 2.2);
+
+                const hitBox = new THREE.Mesh(new THREE.BoxGeometry(3.4, 4.0, 6.2), new THREE.MeshBasicMaterial({ visible: false }));
+                hitBox.position.set(0, 2.0, 0); hitBox.userData = { type: 'vehicle', vehicle: v };
+                v.group.add(hitBox); interactables.push(hitBox);
+            }
+
+            v.group.position.copy(v.pos);
+            v.group.rotation.y = v.heading;
+            scene.add(v.group);
+            vehicles.push(v);
+            return v;
+        }
+
+        createVehicleInstance('starter_tractor', new THREE.Vector3(-6.5, 0, 2.5), 0);
+
+        window.buyEquipment = function(item) {
+            if (item === 'coop' && !state.hasCoop) {
+                if (state.money < 400) return showToast('Need $400 for Chicken Coop!', 'text-rose-400');
+                state.money -= 400; state.hasCoop = true;
+                buildChickenCoopAndPasture();
+                sfx.playFanfare(); showToast('🐔 Chicken Coop & Pasture Built South of Farmhouse!', 'text-amber-300');
+            } else if (item === 'dairy' && !state.hasDairy) {
+                if (state.money < 950) return showToast('Need $950 for Dairy Cattle Barn!', 'text-rose-400');
+                state.money -= 950; state.hasDairy = true;
+                buildDairyBarnAndPasture();
+                sfx.playFanfare(); showToast('🐄 Dairy Cattle Barn & Pasture Built South of Farmhouse!', 'text-sky-300');
+            } else if (item === 'pickup' && !state.hasPickup) {
+                if (state.money < 450) return showToast('Need $450 for Pickup Truck!', 'text-rose-400');
+                state.money -= 450; state.hasPickup = true;
+                createVehicleInstance('pickup', new THREE.Vector3(-20.0, 0, 15.0), -Math.PI / 2);
+                sfx.playFanfare(); showToast('🛻 Farm Utility Pickup parked at Dealership Lot!', 'text-sky-300');
+            } else if (item === 'heavy_tractor' && !state.hasHeavyTractor) {
+                if (state.money < 650) return showToast('Need $650 for GreenStar 8R!', 'text-rose-400');
+                state.money -= 650; state.hasHeavyTractor = true;
+                createVehicleInstance('heavy_tractor', new THREE.Vector3(-20.0, 0, 4.5), -Math.PI / 2);
+                sfx.playFanfare(); showToast('🚜 GreenStar 8R Tractor delivered to Dealership Lot!', 'text-emerald-300');
+            } else if (item === 'combine' && !state.hasCombine) {
+                if (state.money < 1400) return showToast('Need $1,400 for Titan X900!', 'text-rose-400');
+                state.money -= 1400; state.hasCombine = true;
+                createVehicleInstance('combine', new THREE.Vector3(-20.0, 0, 10.0), -Math.PI / 2);
+                sfx.playFanfare(); showToast('🌾 Titan X900 Combine delivered to Dealership Lot!', 'text-amber-300');
+            } else if (item === 'broad_hoe' && !state.broadHoe) {
+                if (state.money < 120) return showToast('Need $120!', 'text-rose-400');
+                state.money -= 120; state.broadHoe = true; HOTBAR_ITEMS[1].name = 'Steel Broad-Hoe (3x1 Row)';
+                sfx.playCoin(); showToast('⛏️ Steel Broad-Hoe Unlocked!', 'text-emerald-300');
+            } else if (item === 'sprayer' && !state.sprayer) {
+                if (state.money < 180) return showToast('Need $180!', 'text-rose-400');
+                state.money -= 180; state.sprayer = true; state.maxWater = 250; state.water = 250;
+                HOTBAR_ITEMS[2].name = 'Brass 3x3 Sprayer (250L)';
+                sfx.playCoin(); showToast('💧 Brass 3x3 Sprayer Unlocked!', 'text-sky-300');
+            } else if (item === 'scythe' && !state.scythe) {
+                if (state.money < 200) return showToast('Need $200!', 'text-rose-400');
+                state.money -= 200; state.scythe = true; HOTBAR_ITEMS[0].name = 'Steel Scythe (3x3 Harvest)';
+                sfx.playCoin(); showToast('🗡️ Steel Scythe Unlocked!', 'text-amber-300');
+            } else if (item === 'spreader' && !state.spreader) {
+                if (state.money < 250) return showToast('Need $250!', 'text-rose-400');
+                state.money -= 250; state.spreader = true;
+                sfx.playCoin(); showToast('🌱 Turbo 3x3 Seed Spreader Unlocked!', 'text-lime-300');
+            } else if (item === 'sprinklers' && !state.sprinklers) {
+                if (state.money < 500) return showToast('Need $500!', 'text-rose-400');
+                state.money -= 500; state.sprinklers = true; installSprinklersOnOwnedFields();
+                sfx.playFanfare(); showToast('💦 Automated Field Sprinklers Installed!', 'text-cyan-300');
+            }
+            updateActiveToolVisual();
+            updateHUD();
+        };
+
+        // ==========================================
+        // 11. HIREABLE 3D AI FARMHAND CREW SYSTEM
+        // ==========================================
+        const FARMHAND_ROSTER = [
+            { id: 'w1', name: 'Caleb Miller', title: 'Veteran Field Hand', wage: 45, speed: 4.8, workTime: 1.05, shirt: 0x2563eb, hat: 0xd97706, hired: false, role: 'all', fieldId: 'all', seedPref: 'auto' },
+            { id: 'w2', name: 'Elena Brooks', title: 'Master Horticulturist', wage: 60, speed: 5.4, workTime: 0.85, shirt: 0x16a34a, hat: 0xfacc15, hired: false, role: 'all', fieldId: 'all', seedPref: 'auto' },
+            { id: 'w3', name: 'Hank Dawson', title: 'Soil & Seeding Specialist', wage: 50, speed: 4.9, workTime: 0.95, shirt: 0xdc2626, hat: 0x78350f, hired: false, role: 'soil_seed', fieldId: 'all', seedPref: 'auto' },
+            { id: 'w4', name: 'Maya Lin', title: 'Irrigation & Care Tech', wage: 50, speed: 5.2, workTime: 0.9, shirt: 0x0891b2, hat: 0xf8fafc, hired: false, role: 'water', fieldId: 'all', seedPref: 'auto' },
+            { id: 'w5', name: 'Jasper Cole', title: 'Harvesting Foreman', wage: 65, speed: 5.6, workTime: 0.8, shirt: 0xd97706, hat: 0x1e293b, hired: false, role: 'harvest', fieldId: 'all', seedPref: 'auto' },
+            { id: 'w6', name: 'Nora Vance', title: 'Agronomy Supervisor', wage: 75, speed: 6.0, workTime: 0.72, shirt: 0x7c3aed, hat: 0xfde047, hired: false, role: 'all', fieldId: 'all', seedPref: 'auto' }
+        ];
+
+        const activeWorkers = [];
+
+        function createWorker3DEntity(cfg) {
+            const g = new THREE.Group();
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xfdba74, roughness: 0.7 });
+            const shirtMat = new THREE.MeshStandardMaterial({ color: cfg.shirt, roughness: 0.8 });
+            const denimMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.85 });
+            const hatMat = new THREE.MeshStandardMaterial({ color: cfg.hat, roughness: 0.8 });
+
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.75, 0.32), shirtMat);
+            torso.position.y = 1.05; torso.castShadow = true; g.add(torso);
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.38, 0.38), skinMat);
+            head.position.y = 1.65; head.castShadow = true; g.add(head);
+
+            const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 14), hatMat);
+            brim.position.y = 1.85; g.add(brim);
+            const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.18, 12), hatMat);
+            crown.position.y = 1.95; g.add(crown);
+
+            const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.68, 0.22), denimMat);
+            leftLeg.position.set(-0.15, 0.34, 0); g.add(leftLeg);
+            const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.68, 0.22), denimMat);
+            rightLeg.position.set(0.15, 0.34, 0); g.add(rightLeg);
+
+            const rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.6, 0.16), skinMat);
+            rightArm.position.set(0.38, 1.1, 0); g.add(rightArm);
+
+            // Floating Name & Status Badge
+            const badgeCanvas = document.createElement('canvas');
+            badgeCanvas.width = 256; badgeCanvas.height = 64;
+            const bctx = badgeCanvas.getContext('2d');
+            const badgeTex = new THREE.CanvasTexture(badgeCanvas);
+            const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTex, transparent: true }));
+            sprite.position.set(0, 2.45, 0);
+            sprite.scale.set(2.2, 0.55, 1);
+            g.add(sprite);
+
+            const workerObj = {
+                cfg,
+                group: g,
+                leftLeg,
+                rightLeg,
+                rightArm,
+                badgeCanvas,
+                bctx,
+                badgeTex,
+                pos: new THREE.Vector3(-4 + activeWorkers.length * 1.5, 0, 12),
+                targetPlot: null,
+                actionType: 'idle',
+                workProgress: 0,
+                walkPhase: Math.random() * 6,
+                lastStatusText: ''
+            };
+
+            g.position.copy(workerObj.pos);
+            scene.add(g);
+            activeWorkers.push(workerObj);
+            updateWorkerBadge(workerObj, 'Ready');
+            return workerObj;
+        }
+
+        function updateWorkerBadge(w, statusText) {
+            if (w.lastStatusText === statusText) return;
+            w.lastStatusText = statusText;
+            const ctx = w.bctx;
+            ctx.clearRect(0, 0, 256, 64);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+            ctx.fillRect(8, 6, 240, 52);
+            ctx.strokeStyle = '#38bdf8';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(8, 6, 240, 52);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 18px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(w.cfg.name.split(' ')[0], 128, 28);
+            ctx.fillStyle = '#fde047';
+            ctx.font = '600 15px Inter, sans-serif';
+            ctx.fillText(statusText, 128, 49);
+            w.badgeTex.needsUpdate = true;
+        }
+
+        function pickSeedForWorker(cfg) {
+            if (cfg.seedPref !== 'auto') {
+                return state.seeds[cfg.seedPref] > 0 ? cfg.seedPref : null;
+            }
+            for (const k of CROP_KEYS) {
+                if (state.seeds[k] > 0) return k;
+            }
+            return null;
+        }
+
+        function assignTaskToWorker(w) {
+            const cfg = w.cfg;
+            const candidatePlots = plots.filter(p => p.field.owned && (cfg.fieldId === 'all' || p.field.id === cfg.fieldId));
+            if (candidatePlots.length === 0) return;
+
+            // Priority 1: Harvest ripe crops
+            if (cfg.role === 'all' || cfg.role === 'harvest') {
+                const ripe = candidatePlots.filter(p => p.crop && p.stage === 4);
+                if (ripe.length > 0) {
+                    w.targetPlot = ripe[Math.floor(Math.random() * ripe.length)];
+                    w.actionType = 'harvest';
+                    return;
+                }
+            }
+
+            // Priority 2: Water dry crops or tilled plots
+            if (cfg.role === 'all' || cfg.role === 'water') {
+                const dry = candidatePlots.filter(p => (p.crop && p.state !== 'watered') || (p.state === 'tilled' && !p.crop));
+                if (dry.length > 0) {
+                    w.targetPlot = dry[Math.floor(Math.random() * dry.length)];
+                    w.actionType = 'water';
+                    return;
+                }
+            }
+
+            // Priority 3: Plant seeds on tilled/watered empty plots
+            if (cfg.role === 'all' || cfg.role === 'soil_seed') {
+                const seedToUse = pickSeedForWorker(cfg);
+                if (seedToUse) {
+                    const emptyTilled = candidatePlots.filter(p => p.state !== 'untilled' && !p.crop);
+                    if (emptyTilled.length > 0) {
+                        w.targetPlot = emptyTilled[Math.floor(Math.random() * emptyTilled.length)];
+                        w.actionType = 'plant';
+                        return;
+                    }
+                }
+                // Priority 4: Till untilled plots
+                const untilled = candidatePlots.filter(p => p.state === 'untilled');
+                if (untilled.length > 0) {
+                    w.targetPlot = untilled[Math.floor(Math.random() * untilled.length)];
+                    w.actionType = 'till';
+                    return;
+                }
+            }
+
+            w.targetPlot = null;
+            w.actionType = 'idle';
+        }
+
+        function updateAIWorkers(dt) {
+            activeWorkers.forEach(w => {
+                // Also auto-collect eggs/milk if idle and barns are full
+                if (!w.targetPlot && w.cfg.role === 'all') {
+                    if (state.hasCoop && coopEggsReady >= 3) {
+                        coopEggsReady = 0; state.animalGoods.eggs += 3;
+                        updateWorkerBadge(w, 'Gathered Eggs');
+                    } else if (state.hasDairy && barnMilkReady >= 2) {
+                        barnMilkReady = 0; state.animalGoods.milk += 2;
+                        updateWorkerBadge(w, 'Milked Cows');
+                    }
+                }
+
+                if (!w.targetPlot) {
+                    assignTaskToWorker(w);
+                    if (!w.targetPlot) {
+                        updateWorkerBadge(w, 'Idle • Awaiting Tasks');
+                        w.leftLeg.rotation.x = 0;
+                        w.rightLeg.rotation.x = 0;
+                        w.rightArm.rotation.x = 0;
+                        return;
+                    }
+                }
+
+                const dest = w.targetPlot.mesh.position;
+                const dx = dest.x - w.pos.x;
+                const dz = dest.z - w.pos.z;
+                const dist = Math.hypot(dx, dz);
+
+                if (dist > 1.15) {
+                    const vx = (dx / dist) * w.cfg.speed;
+                    const vz = (dz / dist) * w.cfg.speed;
+                    w.pos.x += vx * dt;
+                    w.pos.z += vz * dt;
+                    w.group.position.set(w.pos.x, 0, w.pos.z);
+                    w.group.rotation.y = Math.atan2(vx, vz);
+
+                    w.walkPhase += dt * 10;
+                    w.leftLeg.rotation.x = Math.sin(w.walkPhase) * 0.55;
+                    w.rightLeg.rotation.x = -Math.sin(w.walkPhase) * 0.55;
+                    w.rightArm.rotation.x = -Math.sin(w.walkPhase) * 0.4;
+                    updateWorkerBadge(w, `Walking to ${w.actionType}`);
+                } else {
+                    w.leftLeg.rotation.x = 0;
+                    w.rightLeg.rotation.x = 0;
+                    w.walkPhase += dt * 12;
+                    w.rightArm.rotation.x = -0.8 + Math.sin(w.walkPhase) * 0.65;
+                    w.workProgress += dt;
+
+                    const labels = { till: 'Tilling Soil', plant: 'Planting Seeds', water: 'Watering Crop', harvest: 'Harvesting' };
+                    updateWorkerBadge(w, labels[w.actionType] || 'Working');
+
+                    if (w.workProgress >= w.cfg.workTime) {
+                        w.workProgress = 0;
+                        const p = w.targetPlot;
+                        if (w.actionType === 'till' && p.state === 'untilled') {
+                            p.state = 'tilled'; updatePlotVisuals(p);
+                            spawnBurst(p.mesh.position, 0x78350f, 5, 2.0);
+                        } else if (w.actionType === 'plant' && p.state !== 'untilled' && !p.crop) {
+                            const seed = pickSeedForWorker(w.cfg);
+                            if (seed && state.seeds[seed] > 0) {
+                                state.seeds[seed] -= 1; p.crop = seed; p.growth = 0.05;
+                                updatePlotVisuals(p);
+                            }
+                        } else if (w.actionType === 'water' && p.state !== 'watered') {
+                            waterSinglePlot(p);
+                        } else if (w.actionType === 'harvest' && p.crop && p.stage === 4) {
+                            harvestPlot(p, 1);
+                        }
+                        w.targetPlot = null;
+                    }
+                }
+            });
+        }
+
+        window.toggleHireWorker = function(workerId) {
+            const cfg = FARMHAND_ROSTER.find(w => w.id === workerId);
+            if (!cfg) return;
+            if (!cfg.hired) {
+                if (state.money < cfg.wage) return showToast(`Need $${cfg.wage} advance wage to hire ${cfg.name}!`, 'text-rose-400');
+                state.money -= cfg.wage;
+                cfg.hired = true;
+                createWorker3DEntity(cfg);
+                sfx.playFanfare();
+                showToast(`👷 Hired ${cfg.name} ($${cfg.wage}/day)!`, 'text-sky-300');
+            } else {
+                cfg.hired = false;
+                const idx = activeWorkers.findIndex(aw => aw.cfg.id === workerId);
+                if (idx !== -1) {
+                    scene.remove(activeWorkers[idx].group);
+                    activeWorkers.splice(idx, 1);
+                }
+                showToast(`Dismissed ${cfg.name} from crew.`, 'text-slate-300');
+            }
+            updateHUD();
+        };
+
+        window.updateWorkerConfig = function(workerId, key, val) {
+            const cfg = FARMHAND_ROSTER.find(w => w.id === workerId);
+            if (!cfg) return;
+            cfg[key] = val;
+            const active = activeWorkers.find(aw => aw.cfg.id === workerId);
+            if (active) active.targetPlot = null;
+        };
+
+        function processDailyPayroll(isOvernightSleep = false) {
+            if (activeWorkers.length === 0) return;
+            let totalWages = 0;
+            activeWorkers.forEach(w => { totalWages += w.cfg.wage; });
+
+            if (isOvernightSleep) {
+                // Overnight shift work bonus
+                let actions = activeWorkers.length * 14;
+                plots.forEach(p => {
+                    if (!p.field.owned || actions <= 0) return;
+                    if (p.crop && p.stage === 4) { harvestPlot(p, 1); actions--; }
+                    else if (p.state === 'tilled' && !p.crop) {
+                        const s = pickSeedForWorker({ seedPref: 'auto' });
+                        if (s) { state.seeds[s]--; p.crop = s; p.growth = 0.25; updatePlotVisuals(p); actions--; }
+                    }
+                });
+            }
+
+            if (state.money >= totalWages) {
+                state.money -= totalWages;
+                showToast(`👷 Paid $${totalWages} in daily farmhand wages.`, 'text-sky-300');
+            } else {
+                showToast(`⚠️ Insufficient funds ($${totalWages}) for crew wages!`, 'text-rose-400');
+            }
+        }
+
+        // ==========================================
+        // 12. FIRST-PERSON VIEWMODEL TOOLS
+        // ==========================================
+        const viewmodelGroup = new THREE.Group();
+        viewmodelGroup.position.set(0.38, -0.34, -0.58);
+        camera.add(viewmodelGroup);
+
+        const toolMeshes = {};
+        function buildViewmodels() {
+            const skinMat = new THREE.MeshStandardMaterial({ color: 0xfdba74, roughness: 0.7 });
+            const woodMat = new THREE.MeshStandardMaterial({ map: naturalWoodTex, roughness: 0.8 });
+            const ironMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.75, roughness: 0.25 });
+            const canMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.4, metalness: 0.2 });
+
+            const hand = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.26), skinMat);
+            hand.rotation.set(0.2, -0.2, 0);
+            toolMeshes.hand = hand;
+
+            const hoe = new THREE.Group();
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.025, 0.75, 8), woodMat);
+            handle.rotation.x = 0.45; hoe.add(handle);
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.03, 0.14), ironMat);
+            blade.position.set(0, 0.31, -0.18); blade.rotation.x = 0.45; hoe.add(blade);
+            toolMeshes.hoe = hoe;
+
+            const can = new THREE.Group();
+            can.add(new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.15, 0.26, 12), canMat));
+            const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.035, 0.26, 8), canMat);
+            spout.position.set(0, 0.05, -0.18); spout.rotation.x = -0.85; can.add(spout);
+            toolMeshes.water = can;
+
+            CROP_KEYS.forEach(crop => {
+                const pouch = new THREE.Group();
+                pouch.add(new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.1), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.9 })));
+                const label = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.11, 0.11), new THREE.MeshBasicMaterial({ color: CROP_DATA[crop].color }));
+                label.position.y = 0.02; pouch.add(label);
+                toolMeshes['seed_' + crop] = pouch;
+            });
+
+            Object.values(toolMeshes).forEach(m => { m.visible = false; viewmodelGroup.add(m); });
+            toolMeshes.hand.visible = true;
+        }
+        buildViewmodels();
+
+        function updateActiveToolVisual() {
+            const current = HOTBAR_ITEMS[state.selectedSlot];
+            Object.keys(toolMeshes).forEach(k => {
+                toolMeshes[k].visible = (k === current.id) && !state.activeVehicle;
+            });
+            document.getElementById('active-tool-label').textContent = `${current.key}. ${current.name}`;
+            renderHotbar();
+        }
+
+        // ==========================================
+        // 13. UI, MINIMAP RADAR, BAKERY & SLEEP SYSTEM
+        // ==========================================
+        function showToast(msg, colorClass = 'text-white') {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = `hud-glass px-4 py-1.5 rounded-full text-xs font-bold shadow-lg toast-anim ${colorClass}`;
+            el.textContent = msg;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 2650);
+        }
+
+        function renderHotbar() {
+            const hb = document.getElementById('hotbar');
+            hb.innerHTML = '';
+            HOTBAR_ITEMS.forEach((item, idx) => {
+                const isSel = idx === state.selectedSlot;
+                const badge = item.crop
+                    ? `<span class="absolute -top-1.5 -right-1.5 bg-slate-900 border border-slate-600 text-white text-[10px] font-extrabold px-1.5 rounded-full">${state.seeds[item.crop]}</span>`
+                    : '';
+                const slot = document.createElement('div');
+                slot.className = `hotbar-slot relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl border border-white/15 bg-slate-900/75 flex flex-col items-center justify-center text-white ${isSel ? 'selected' : ''}`;
+                slot.innerHTML = `<span class="absolute top-0.5 left-1.5 text-[9px] font-bold text-slate-400">${item.key}</span><span class="text-lg sm:text-xl">${item.icon}</span>${badge}`;
+                hb.appendChild(slot);
+            });
+        }
+
+        const minimapCanvas = document.getElementById('minimap-canvas');
+        const mctx = minimapCanvas.getContext('2d');
+        function drawMinimap() {
+            const w = minimapCanvas.width, h = minimapCanvas.height;
+            mctx.fillStyle = '#14532d';
+            mctx.fillRect(0, 0, w, h);
+
+            const toMap = (wx, wz) => ({
+                x: ((wx + 65) / 215) * w,
+                y: ((wz + 68) / 140) * h
+            });
+
+            // River
+            const rv = toMap(50, -68);
+            mctx.fillStyle = '#0284c7';
+            mctx.fillRect(rv.x, 0, 8, h);
+
+            // Roads
+            const hw = toMap(-40, 11);
+            mctx.fillStyle = '#475569';
+            mctx.fillRect(hw.x, hw.y, 100, 4);
+
+            // Fields
+            FIELDS.forEach(f => {
+                const p = toMap(f.center.x, f.center.z);
+                const fw = (f.cols * PLOT_SPACING / 215) * w;
+                const fh = (f.rows * PLOT_SPACING / 140) * h;
+                mctx.fillStyle = f.owned ? '#854d0e' : 'rgba(239, 68, 68, 0.38)';
+                mctx.fillRect(p.x - fw / 2, p.y - fh / 2, fw, fh);
+                mctx.strokeStyle = f.owned ? '#a3e635' : '#f87171';
+                mctx.lineWidth = 1;
+                mctx.strokeRect(p.x - fw / 2, p.y - fh / 2, fw, fh);
+            });
+
+            // Landmarks: Farmhouse (Yellow), Dealership (Orange), Pastures (Pink), Willowbrook Town (Purple)
+            const hp = toMap(-14, 26); mctx.fillStyle = '#fde047'; mctx.fillRect(hp.x - 3, hp.y - 3, 6, 6);
+            const dp = toMap(-26, 8); mctx.fillStyle = '#f97316'; mctx.fillRect(dp.x - 3.5, dp.y - 3.5, 7, 7);
+            const pp = toMap(-24, 46); mctx.fillStyle = '#f472b6'; mctx.fillRect(pp.x - 4, pp.y - 3, 8, 6);
+            const tp = toMap(106, 12); mctx.fillStyle = '#c084fc'; mctx.fillRect(tp.x - 6, tp.y - 6, 12, 12);
+
+            // AI Workers (Cyan dots)
+            activeWorkers.forEach(aw => {
+                const wp = toMap(aw.pos.x, aw.pos.z);
+                mctx.fillStyle = '#38bdf8';
+                mctx.beginPath(); mctx.arc(wp.x, wp.y, 2.3, 0, Math.PI * 2); mctx.fill();
+            });
+
+            // Player Arrow
+            const activePos = state.activeVehicle ? state.activeVehicle.pos : player.pos;
+            const activeYaw = state.activeVehicle ? state.activeVehicle.heading : player.yaw;
+            const pp2 = toMap(activePos.x, activePos.z);
+            mctx.save();
+            mctx.translate(pp2.x, pp2.y);
+            mctx.rotate(-activeYaw);
+            mctx.fillStyle = '#ffffff';
+            mctx.beginPath();
+            mctx.moveTo(0, -4.5); mctx.lineTo(3, 3.5); mctx.lineTo(-3, 3.5);
+            mctx.closePath(); mctx.fill();
+            mctx.restore();
+        }
+
+        function getCropSellPrice(cropKey) {
+            const base = CROP_DATA[cropKey].sellPrice;
+            return state.dailySpecial === cropKey ? Math.round(base * 1.4) : base;
+        }
+
+        window.fulfillContract = function(idx) {
+            const c = state.contracts[idx];
+            if (!c) return;
+            if (state.harvest[c.crop] < c.qty) return showToast(`Need ${c.qty} ${CROP_DATA[c.crop].name}!`, 'text-rose-400');
+            state.harvest[c.crop] -= c.qty;
+            state.money += c.reward;
+            sfx.playFanfare();
+            showToast(`📦 Contract Delivered! +$${c.reward}`, 'text-emerald-300');
+            generateContracts();
+            updateHUD();
+        };
+
+        window.craftBakeryItem = function(recipeId) {
+            const r = BAKERY_RECIPES.find(x => x.id === recipeId);
+            if (!r) return;
+            for (const [k, qty] of Object.entries(r.req)) {
+                const have = state.harvest[k] !== undefined ? state.harvest[k] : (state.animalGoods[k] || 0);
+                if (have < qty) return showToast(`Missing ingredients for ${r.name}!`, 'text-rose-400');
+            }
+            for (const [k, qty] of Object.entries(r.req)) {
+                if (state.harvest[k] !== undefined) state.harvest[k] -= qty;
+                else state.animalGoods[k] -= qty;
+            }
+            state.bakedGoods[r.id] += 1;
+            sfx.playHarvest();
+            showToast(`🥖 Baked ${r.name} (Worth $${r.sellPrice})!`, 'text-amber-300');
+            updateHUD();
+        };
+
+        function calculateTotalSellValue() {
+            let total = 0;
+            CROP_KEYS.forEach(k => { total += state.harvest[k] * getCropSellPrice(k); });
+            total += state.animalGoods.eggs * 22 + state.animalGoods.milk * 45;
+            total += state.orchardFruit.apple * 35 + state.orchardFruit.peach * 48;
+            BAKERY_RECIPES.forEach(r => { total += state.bakedGoods[r.id] * r.sellPrice; });
+            return total;
+        }
+
+        function updateHUD() {
+            const moneyStr = `$${state.money.toLocaleString()}`;
+            document.getElementById('hud-money').textContent = moneyStr;
+            document.getElementById('shop-money').textContent = moneyStr;
+            document.getElementById('dealer-money').textContent = moneyStr;
+            document.getElementById('hud-day').textContent = `Day ${state.day}`;
+
+            const hrs = Math.floor(state.timeOfDay);
+            const mins = Math.floor((state.timeOfDay - hrs) * 60);
+            const ampm = hrs >= 12 ? 'PM' : 'AM';
+            const dispHr = hrs % 12 === 0 ? 12 : hrs % 12;
+            document.getElementById('hud-time').textContent = `${String(dispHr).padStart(2, '0')}:${String(mins).padStart(2, '0')} ${ampm}`;
+            document.getElementById('time-icon').textContent = (hrs >= 6 && hrs < 19) ? '☀️' : '🌙';
+
+            const p = state.activeVehicle ? state.activeVehicle.pos : player.pos;
+            let zoneName = 'Homestead Valley';
+            if (p.x > 65) zoneName = 'Willowbrook Town';
+            else if (p.x >= 50 && p.x <= 65) zoneName = 'River Crossing';
+            else if (p.x > -19 && p.x < -9 && p.z > 21 && p.z < 31) zoneName = 'Inside Farmhouse';
+            else if (p.z > 38 && p.x < 0) zoneName = 'Livestock Pastures';
+            else if (p.x < -16 && p.z > -2 && p.z < 18) zoneName = 'AgriTech Dealership';
+
+            const ownedCount = FIELDS.filter(f => f.owned).length;
+            document.getElementById('hud-zone').textContent = zoneName;
+            document.getElementById('hud-sub').textContent = `${ownedCount}/${FIELDS.length} Fields • ${state.weather === 'rain' ? 'Rain' : 'Clear Sky'}`;
+            document.getElementById('hud-crew').textContent = `${activeWorkers.length}/${FARMHAND_ROSTER.length} Hired`;
+
+            if (state.activeVehicle) {
+                const fp = Math.round(state.activeVehicle.fuel);
+                document.getElementById('hud-fuel-pct').textContent = `${fp}%`;
+                document.getElementById('hud-fuel-bar').style.width = `${fp}%`;
+            }
+
+            const buffPill = document.getElementById('buff-pill');
+            if (state.mealBuffTimer > 0) {
+                buffPill.classList.remove('hidden'); buffPill.classList.add('flex');
+                const m = Math.floor(state.mealBuffTimer / 60);
+                const s = Math.floor(state.mealBuffTimer % 60);
+                document.getElementById('hud-buff-timer').textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+            } else {
+                buffPill.classList.add('hidden'); buffPill.classList.remove('flex');
+            }
+
+            const waterPct = Math.round((state.water / state.maxWater) * 100);
+            document.getElementById('hud-water-pct').textContent = `${waterPct}%`;
+            document.getElementById('hud-water-bar').style.width = `${waterPct}%`;
+
+            document.getElementById('inv-wheat').textContent = state.harvest.wheat;
+            document.getElementById('inv-corn').textContent = state.harvest.corn;
+            document.getElementById('inv-pumpkin').textContent = state.harvest.pumpkin;
+            document.getElementById('inv-sunflower').textContent = state.harvest.sunflower;
+            document.getElementById('inv-strawberry').textContent = state.harvest.strawberry;
+            document.getElementById('inv-fruit').textContent = state.orchardFruit.apple + state.orchardFruit.peach;
+            document.getElementById('inv-eggs').textContent = state.animalGoods.eggs;
+            document.getElementById('inv-milk').textContent = state.animalGoods.milk;
+            document.getElementById('inv-baked').textContent = Object.values(state.bakedGoods).reduce((a, b) => a + b, 0);
+
+            const sp = CROP_DATA[state.dailySpecial];
+            document.getElementById('daily-special-label').textContent = `${sp.icon} ${sp.name} ($${getCropSellPrice(state.dailySpecial)} ea today!)`;
+
+            const totalSellVal = calculateTotalSellValue();
+            document.getElementById('shop-harvest-summary').textContent =
+                `Crops: ${state.harvest.wheat + state.harvest.corn + state.harvest.pumpkin + state.harvest.sunflower + state.harvest.strawberry} • Eggs: ${state.animalGoods.eggs} • Milk: ${state.animalGoods.milk} • Fruit: ${state.orchardFruit.apple + state.orchardFruit.peach} • Baked: ${Object.values(state.bakedGoods).reduce((a, b) => a + b, 0)}`;
+            document.getElementById('shop-sell-all-btn').textContent = `Sell All Goods ($${totalSellVal.toLocaleString()})`;
+
+            const appleCnt = orchardTrees.filter(t => t.type === 'apple').length;
+            const peachCnt = orchardTrees.filter(t => t.type === 'peach').length;
+            document.getElementById('apple-tree-count').textContent = appleCnt >= 3 ? 'MAX (3/3)' : `$180 (${appleCnt}/3)`;
+            document.getElementById('peach-tree-count').textContent = peachCnt >= 3 ? 'MAX (3/3)' : `$260 (${peachCnt}/3)`;
+
+            // Render Contracts
+            const cList = document.getElementById('contracts-list');
+            cList.innerHTML = '';
+            state.contracts.forEach((c, idx) => {
+                const cd = CROP_DATA[c.crop];
+                const have = state.harvest[c.crop];
+                const ready = have >= c.qty;
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800 border border-slate-700 p-3 rounded-2xl flex items-center justify-between gap-2';
+                card.innerHTML = `
+                    <div><div class="text-xs font-bold text-white">${c.title}</div><div class="text-[11px] text-slate-300 mt-0.5">Deliver ${cd.icon} ${c.qty} ${cd.name} (Have: ${have})</div></div>
+                    <button onclick="fulfillContract(${idx})" class="px-3 py-1.5 rounded-xl text-xs font-extrabold ${ready ? 'bg-sky-500 hover:bg-sky-400 text-slate-950' : 'bg-slate-700 text-slate-400'}">+$${c.reward}</button>
+                `;
+                cList.appendChild(card);
+            });
+
+            // Render Bakery Recipes
+            const bList = document.getElementById('bakery-recipes-list');
+            bList.innerHTML = '';
+            BAKERY_RECIPES.forEach(r => {
+                let canCraft = true;
+                for (const [k, qty] of Object.entries(r.req)) {
+                    const have = state.harvest[k] !== undefined ? state.harvest[k] : (state.animalGoods[k] || 0);
+                    if (have < qty) canCraft = false;
+                }
+                const card = document.createElement('div');
+                card.className = 'bg-slate-800 border border-slate-700 p-4 rounded-2xl flex flex-col justify-between';
+                card.innerHTML = `
+                    <div>
+                        <div class="flex justify-between items-center"><span class="text-2xl">${r.icon}</span><span class="text-xs font-extrabold text-emerald-400">Sells for $${r.sellPrice}</span></div>
+                        <div class="font-bold text-sm text-white mt-1.5">${r.name}</div>
+                        <div class="text-[11px] text-slate-400 mt-0.5">Requires: ${r.desc} • Baked: ${state.bakedGoods[r.id]}</div>
+                    </div>
+                    <button onclick="craftBakeryItem('${r.id}')" class="mt-3 w-full py-2 rounded-xl text-xs font-extrabold ${canCraft ? 'bg-amber-400 hover:bg-amber-300 text-slate-950' : 'bg-slate-700 text-slate-400'}">Bake Item</button>
+                `;
+                bList.appendChild(card);
+            });
+
+            // Render Crew Roster
+            const wList = document.getElementById('workers-list');
+            wList.innerHTML = '';
+            let dailyWages = 0;
+            FARMHAND_ROSTER.forEach(w => {
+                if (w.hired) dailyWages += w.wage;
+                const card = document.createElement('div');
+                card.className = `bg-slate-800 border ${w.hired ? 'border-sky-500/50' : 'border-slate-700'} p-3.5 rounded-2xl flex flex-col justify-between gap-2`;
+                card.innerHTML = `
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-bold text-sm text-white">${w.name}</div>
+                            <div class="text-[11px] text-slate-400">${w.title} • $${w.wage}/day</div>
+                        </div>
+                        <button onclick="toggleHireWorker('${w.id}')" class="px-3 py-1 rounded-xl text-xs font-extrabold ${w.hired ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40' : 'bg-emerald-500 text-slate-950'}">
+                            ${w.hired ? 'Dismiss' : `Hire ($${w.wage})`}
+                        </button>
+                    </div>
+                    ${w.hired ? `
+                    <div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-700/80 text-[10px]">
+                        <select onchange="updateWorkerConfig('${w.id}', 'role', this.value)" class="bg-slate-900 border border-slate-700 rounded-lg p-1 text-slate-200">
+                            <option value="all" ${w.role === 'all' ? 'selected' : ''}>All Tasks</option>
+                            <option value="soil_seed" ${w.role === 'soil_seed' ? 'selected' : ''}>Till & Plant</option>
+                            <option value="water" ${w.role === 'water' ? 'selected' : ''}>Watering</option>
+                            <option value="harvest" ${w.role === 'harvest' ? 'selected' : ''}>Harvesting</option>
+                        </select>
+                        <select onchange="updateWorkerConfig('${w.id}', 'fieldId', this.value)" class="bg-slate-900 border border-slate-700 rounded-lg p-1 text-slate-200">
+                            <option value="all" ${w.fieldId === 'all' ? 'selected' : ''}>All Fields</option>
+                            ${FIELDS.filter(f => f.owned).map(f => `<option value="${f.id}" ${w.fieldId === f.id ? 'selected' : ''}>${f.name.split(' ')[0]}</option>`).join('')}
+                        </select>
+                        <select onchange="updateWorkerConfig('${w.id}', 'seedPref', this.value)" class="bg-slate-900 border border-slate-700 rounded-lg p-1 text-slate-200">
+                            <option value="auto" ${w.seedPref === 'auto' ? 'selected' : ''}>Auto Seed</option>
+                            ${CROP_KEYS.map(k => `<option value="${k}" ${w.seedPref === k ? 'selected' : ''}>${CROP_DATA[k].name}</option>`).join('')}
+                        </select>
+                    </div>` : ''}
+                `;
+                wList.appendChild(card);
+            });
+            document.getElementById('crew-wage-summary').textContent = `Daily Payroll: $${dailyWages}/day`;
+
+            // Dealership Button States
+            const markOwned = (btnId, priceId, flag) => {
+                if (flag) {
+                    document.getElementById(priceId).textContent = 'OWNED';
+                    document.getElementById(btnId).classList.add('opacity-55', 'pointer-events-none');
+                }
+            };
+            markOwned('buy-coop-btn', 'price-coop', state.hasCoop);
+            markOwned('buy-dairy-btn', 'price-dairy', state.hasDairy);
+            markOwned('buy-pickup-btn', 'price-pickup', state.hasPickup);
+            markOwned('buy-heavy-tractor-btn', 'price-heavy-tractor', state.hasHeavyTractor);
+            markOwned('buy-combine-btn', 'price-combine', state.hasCombine);
+            markOwned('buy-tool-hoe-btn', 'price-broad-hoe', state.broadHoe);
+            markOwned('buy-tool-sprayer-btn', 'price-sprayer', state.sprayer);
+            markOwned('buy-tool-scythe-btn', 'price-scythe', state.scythe);
+            markOwned('buy-tool-spreader-btn', 'price-spreader', state.spreader);
+            markOwned('buy-sprinklers-btn', 'price-sprinklers', state.sprinklers);
+
+            const fieldsList = document.getElementById('dealer-fields-list');
+            fieldsList.innerHTML = '';
+            FIELDS.filter(f => f.price > 0).forEach(f => {
+                const btn = document.createElement('button');
+                btn.className = `bg-slate-800 hover:bg-slate-750 border border-slate-700 p-3 rounded-2xl text-left transition flex flex-col justify-between ${f.owned ? 'opacity-55 pointer-events-none' : ''}`;
+                btn.onclick = () => buyField(f.id);
+                btn.innerHTML = `
+                    <div><div class="font-bold text-xs text-white">🗺️ ${f.name}</div><div class="text-[11px] text-slate-400 mt-0.5">${f.rows * f.cols} Tillable Tiles</div></div>
+                    <div class="mt-2 text-xs font-extrabold ${f.owned ? 'text-slate-400' : 'text-lime-400'}">${f.owned ? 'DEED OWNED' : '$' + f.price.toLocaleString()}</div>
+                `;
+                fieldsList.appendChild(btn);
+            });
+
+            renderHotbar();
+            drawMinimap();
+        }
+
+        window.buySeed = function(type, qty, cost) {
+            if (state.money < cost) return showToast('Not enough coins!', 'text-rose-400');
+            state.money -= cost;
+            state.seeds[type] += qty;
+            sfx.playCoin();
+            showToast(`Bought ${qty} ${CROP_DATA[type].name} Seeds!`, 'text-emerald-300');
+            updateHUD();
+        };
+
+        function sellAllGoods() {
+            const total = calculateTotalSellValue();
+            if (total <= 0) return showToast('No goods to sell yet!', 'text-slate-300');
+            CROP_KEYS.forEach(k => state.harvest[k] = 0);
+            state.animalGoods.eggs = 0; state.animalGoods.milk = 0;
+            state.orchardFruit.apple = 0; state.orchardFruit.peach = 0;
+            BAKERY_RECIPES.forEach(r => state.bakedGoods[r.id] = 0);
+            state.money += total;
+            sfx.playCoin();
+            showToast(`Sold all goods for +$${total.toLocaleString()}!`, 'text-emerald-300');
+            updateHUD();
+        }
+        document.getElementById('shop-sell-all-btn').addEventListener('click', sellAllGoods);
+
+        function openModal(modalType) {
+            state.activeModal = modalType;
+            document.exitPointerLock();
+            updateHUD();
+            const map = { shop: 'shop-modal', dealer: 'dealership-modal', bakery: 'bakery-modal', crew: 'crew-modal' };
+            const el = document.getElementById(map[modalType]);
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        }
+
+        window.closeModals = function() {
+            state.activeModal = null;
+            ['shop-modal', 'dealership-modal', 'bakery-modal', 'crew-modal'].forEach(id => {
+                const el = document.getElementById(id);
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+            });
+            canvas.requestPointerLock();
+        };
+
+        function sleepUntilMorning() {
+            const sleepOverlay = document.getElementById('sleep-overlay');
+            sleepOverlay.classList.remove('opacity-0');
+            sleepOverlay.classList.add('opacity-100');
+
+            setTimeout(() => {
+                state.day += 1;
+                state.timeOfDay = 7.0;
+                state.dailySpecial = CROP_KEYS[Math.floor(Math.random() * CROP_KEYS.length)];
+                generateContracts();
+
+                plots.forEach(p => {
+                    if (p.field.owned && p.crop && p.growth < 1) {
+                        p.growth = Math.min(1, p.growth + (p.state === 'watered' ? 0.65 : 0.3));
+                        updatePlotVisuals(p);
+                    }
+                });
+
+                processDailyPayroll(true);
+                updateHUD();
+                sfx.playFanfare();
+                showToast(`🌅 Good Morning! Day ${state.day} — Today's Special: ${CROP_DATA[state.dailySpecial].name}!`, 'text-amber-300');
+
+                sleepOverlay.classList.remove('opacity-100');
+                sleepOverlay.classList.add('opacity-0');
+            }, 700);
+        }
+
+        // ==========================================
+        // 14. RAYCASTING & INTERACTION
+        // ==========================================
+        const raycaster = new THREE.Raycaster();
+        raycaster.far = 6.2;
+        let currentTarget = null;
+        let highlightedPlot = null;
+
+        function harvestPlot(plot, yieldMultiplier = 1) {
+            if (!plot.field.owned || !plot.crop || plot.stage < 4) return false;
+            const cropType = plot.crop;
+            const isRegrow = CROP_DATA[cropType].regrow;
+            const amount = Math.random() < (yieldMultiplier - 1) ? 2 : 1;
+
+            state.harvest[cropType] += amount;
+            spawnBurst(plot.mesh.position, CROP_DATA[cropType].color, 10, 3.2);
+
+            if (isRegrow) plot.growth = 0.55;
+            else { plot.crop = null; plot.growth = 0; plot.state = 'tilled'; }
+            updatePlotVisuals(plot);
+            return true;
+        }
+
+        function waterSinglePlot(plot) {
+            if (!plot.field.owned) return false;
+            if (plot.state === 'tilled' || (plot.crop && plot.state !== 'watered')) {
+                plot.state = 'watered';
+                plot.moisture = 1.0;
+                updatePlotVisuals(plot);
+                spawnBurst(plot.mesh.position, 0x38bdf8, 5, 2.2);
+                return true;
+            }
+            return false;
+        }
+
+        function getNeighborPlots(centerPlot, radiusRow, radiusCol) {
+            return plots.filter(p =>
+                p.field === centerPlot.field &&
+                Math.abs(p.row - centerPlot.row) <= radiusRow &&
+                Math.abs(p.col - centerPlot.col) <= radiusCol
+            );
+        }
+
+        function handleWorldInteract(target) {
+            if (!target) return false;
+            if (target.type === 'house_door') { houseDoorOpen = !houseDoorOpen; sfx.playDoor(); return true; }
+            if (target.type === 'house_bed') { sleepUntilMorning(); return true; }
+            if (target.type === 'house_kitchen') {
+                state.mealBuffTimer = 90; sfx.playFanfare();
+                showToast('🍲 Ate Farm Stew! +35% Sprint Speed for 90s!', 'text-orange-300');
+                updateHUD(); return true;
+            }
+            if (target.type === 'house_pc') { openModal('shop'); return true; }
+            if (target.type === 'water_trough') {
+                state.water = state.maxWater; sfx.playWater();
+                spawnBurst(new THREE.Vector3(-9.5, 1.1, 10.5), 0x38bdf8, 14, 3.0);
+                showToast(`Water Tank Refilled (${state.maxWater}L)!`, 'text-sky-300');
+                updateHUD(); return true;
+            }
+            if (target.type === 'fuel_pump') {
+                vehicles.forEach(v => { v.fuel = v.maxFuel; });
+                sfx.playCoin();
+                showToast('⛽ Refueled all farm vehicles to 100%!', 'text-amber-300');
+                updateHUD(); return true;
+            }
+            if (target.type === 'orchard_tree') {
+                const t = target.tree;
+                if (!t.ripe) return showToast('Fruit is still ripening on the branches!', 'text-slate-300');
+                t.ripe = false; t.growth = 0;
+                t.fruitMeshes.forEach(m => m.visible = false);
+                state.orchardFruit[t.type] += 3;
+                sfx.playHarvest();
+                spawnBurst(t.group.position, t.type === 'apple' ? 0xdc2626 : 0xfb923c, 12, 3.0);
+                showToast(`🍎 Picked 3 Fresh ${t.type === 'apple' ? 'Apples' : 'Peaches'}!`, 'text-rose-300');
+                updateHUD(); return true;
+            }
+            if (target.type === 'collect_eggs') {
+                if (coopEggsReady <= 0) return showToast('Hens are still laying eggs!', 'text-slate-300');
+                const amt = coopEggsReady; coopEggsReady = 0;
+                state.animalGoods.eggs += amt;
+                sfx.playHarvest(); showToast(`🥚 Collected ${amt} Fresh Eggs!`, 'text-amber-200');
+                updateHUD(); return true;
+            }
+            if (target.type === 'collect_milk') {
+                if (barnMilkReady <= 0) return showToast('Cows are grazing — check back shortly!', 'text-slate-300');
+                const amt = barnMilkReady; barnMilkReady = 0;
+                state.animalGoods.milk += amt;
+                sfx.playHarvest(); showToast(`🥛 Collected ${amt} Jugs of Fresh Milk!`, 'text-sky-200');
+                updateHUD(); return true;
+            }
+            if (target.type === 'fishing_dock') {
+                if (state.fishingCooldown > 0) return showToast('Waiting for fish to bite...', 'text-sky-300');
+                state.fishingCooldown = 4.0;
+                const catches = [
+                    { name: 'River Trout', val: 38 },
+                    { name: 'Golden Carp', val: 55 },
+                    { name: 'Channel Catfish', val: 75 }
+                ];
+                const fish = catches[Math.floor(Math.random() * catches.length)];
+                state.money += fish.val;
+                sfx.playCoin();
+                spawnBurst(new THREE.Vector3(54.5, 0.4, 32), 0x38bdf8, 14, 3.2);
+                showToast(`🎣 Caught a ${fish.name}! Sold on pier for +$${fish.val}!`, 'text-sky-300');
+                updateHUD(); return true;
+            }
+            if (target.type === 'market_stall') { openModal('shop'); return true; }
+            if (target.type === 'dealership') { openModal('dealer'); return true; }
+            if (target.type === 'bakery_mill') { openModal('bakery'); return true; }
+            if (target.type === 'hiring_hall') { openModal('crew'); return true; }
+            if (target.type === 'field_sign') { buyField(target.field.id); return true; }
+            return false;
+        }
+
+        function performPrimaryAction() {
+            if (state.activeVehicle || state.activeModal) return;
+            player.swingTimer = 1.0;
+
+            if (handleWorldInteract(currentTarget)) return;
+
+            const activeItem = HOTBAR_ITEMS[state.selectedSlot];
+            if (!currentTarget || currentTarget.type !== 'plot') return;
+
+            const plot = currentTarget.plot;
+            if (!plot.field.owned) {
+                showToast(`Locked Land! Buy "${plot.field.name}" ($${plot.field.price}) at the FOR SALE sign.`, 'text-rose-400');
+                return;
+            }
+
+            if (plot.crop && plot.stage === 4) {
+                const targets = state.scythe ? getNeighborPlots(plot, 1, 1) : [plot];
+                let count = 0;
+                targets.forEach(p => { if (harvestPlot(p, 1)) count++; });
+                if (count > 0) {
+                    sfx.playHarvest();
+                    showToast(`Harvested ${count} crop${count > 1 ? 's' : ''}!`, 'text-amber-300');
+                    updateHUD();
+                }
+                return;
+            }
+
+            if (activeItem.id === 'hoe') {
+                const targets = state.broadHoe ? getNeighborPlots(plot, 0, 1) : [plot];
+                let tilled = false;
+                targets.forEach(p => {
+                    if (p.state === 'untilled') {
+                        p.state = 'tilled'; updatePlotVisuals(p);
+                        spawnBurst(p.mesh.position, 0x78350f, 6, 2.5);
+                        tilled = true;
+                    }
+                });
+                if (tilled) sfx.playTill();
+                return;
+            }
+
+            if (activeItem.id === 'water') {
+                if (state.water <= 0) return showToast('Empty! Refill at the Water Tower Trough.', 'text-sky-300');
+                if (plot.state === 'untilled') return showToast('Till soil with Hoe [2] first!', 'text-amber-300');
+                const targets = state.sprayer ? getNeighborPlots(plot, 1, 1) : [plot];
+                let watered = false;
+                targets.forEach(p => { if (waterSinglePlot(p)) watered = true; });
+                if (watered) {
+                    state.water = Math.max(0, state.water - 10);
+                    sfx.playWater();
+                    updateHUD();
+                }
+                return;
+            }
+
+            if (activeItem.crop) {
+                const cropType = activeItem.crop;
+                if (plot.state === 'untilled') return showToast('Use Hoe [2] to till soil first!', 'text-amber-300');
+                const targets = state.spreader ? getNeighborPlots(plot, 1, 1) : [plot];
+                let planted = 0;
+                targets.forEach(p => {
+                    if (p.state !== 'untilled' && !p.crop && state.seeds[cropType] > 0) {
+                        state.seeds[cropType] -= 1; p.crop = cropType; p.growth = 0.05;
+                        updatePlotVisuals(p); planted++;
+                    }
+                });
+                if (planted > 0) { sfx.playPlant(); updateHUD(); }
+                else if (state.seeds[cropType] <= 0) showToast(`Out of ${CROP_DATA[cropType].name} seeds!`, 'text-rose-400');
+            }
+        }
+
+        function updateInteractionRaycast() {
+            const promptEl = document.getElementById('interact-prompt');
+            const keyEl = document.getElementById('prompt-key');
+            const textEl = document.getElementById('prompt-text');
+            const crosshair = document.getElementById('crosshair');
+
+            if (highlightedPlot) { highlightedPlot.mesh.position.y = 0.07; highlightedPlot = null; }
+
+            if (state.activeVehicle || state.activeModal) {
+                promptEl.classList.add('hidden');
+                crosshair.classList.remove('active');
+                currentTarget = null;
+                return;
+            }
+
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = raycaster.intersectObjects(interactables, false);
+
+            if (hits.length > 0) {
+                const hitData = hits[0].object.userData;
+                currentTarget = hitData;
+                crosshair.classList.add('active');
+                promptEl.classList.remove('hidden');
+
+                const mapPrompt = {
+                    vehicle: ['E', `Drive ${hitData.vehicle?.name} (Fuel: ${Math.round(hitData.vehicle?.fuel || 0)}%)`],
+                    house_door: ['E / LMB', houseDoorOpen ? 'Close Farmhouse Door' : 'Open Farmhouse Door'],
+                    house_bed: ['E / LMB', 'Sleep Until 07:00 AM (Advance Day)'],
+                    house_kitchen: ['E / LMB', 'Eat Home-Cooked Stew (+Speed Buff)'],
+                    house_pc: ['E / LMB', 'Open Farm Market & Contracts PC'],
+                    water_trough: ['LMB / E', `Refill Water Tank (${state.maxWater}L)`],
+                    fuel_pump: ['LMB / E', 'Refuel All Vehicles (Free)'],
+                    orchard_tree: ['LMB / E', hitData.tree?.ripe ? `Pick 3 ${hitData.tree?.type === 'apple' ? 'Apples' : 'Peaches'}` : 'Fruit Growing...'],
+                    collect_eggs: ['LMB / E', `Collect Fresh Eggs (${coopEggsReady} Ready)`],
+                    collect_milk: ['LMB / E', `Collect Fresh Milk (${barnMilkReady} Jugs Ready)`],
+                    fishing_dock: ['LMB / E', 'Cast Fishing Line in River'],
+                    market_stall: ['LMB / E', 'Open Farmers Market & Store'],
+                    dealership: ['LMB / E', 'Open AgriTech Dealership & Livestock'],
+                    bakery_mill: ['LMB / E', 'Open Grain & Bakery Crafting Mill'],
+                    hiring_hall: ['LMB / E', 'Open Willowbrook Hiring Hall (AI Crew)'],
+                    field_sign: ['LMB / E', `Buy ${hitData.field?.name} ($${hitData.field?.price?.toLocaleString()})`]
+                };
+
+                if (mapPrompt[hitData.type]) {
+                    keyEl.textContent = mapPrompt[hitData.type][0];
+                    textEl.textContent = mapPrompt[hitData.type][1];
+                } else if (hitData.type === 'plot') {
+                    const plot = hitData.plot;
+                    highlightedPlot = plot;
+                    plot.mesh.position.y = 0.11;
+
+                    if (!plot.field.owned) {
+                        keyEl.textContent = '🔒';
+                        textEl.textContent = `${plot.field.name} — Buy Deed ($${plot.field.price})`;
+                        return;
+                    }
+                    const activeItem = HOTBAR_ITEMS[state.selectedSlot];
+                    if (plot.crop && plot.stage === 4) {
+                        keyEl.textContent = 'LMB'; textEl.textContent = `Harvest ${CROP_DATA[plot.crop].name}`;
+                    } else if (plot.crop) {
+                        const pct = Math.min(99, Math.floor(plot.growth * 100));
+                        keyEl.textContent = activeItem.id === 'water' && plot.state !== 'watered' ? 'LMB' : '🌱';
+                        textEl.textContent = activeItem.id === 'water' && plot.state !== 'watered'
+                            ? `Water ${CROP_DATA[plot.crop].name} (${pct}%)`
+                            : `${CROP_DATA[plot.crop].name} Growing (${pct}%)`;
+                    } else if (plot.state === 'untilled') {
+                        keyEl.textContent = activeItem.id === 'hoe' ? 'LMB' : '2';
+                        textEl.textContent = activeItem.id === 'hoe' ? 'Till Soil' : 'Equip Hoe [2] to Till';
+                    } else {
+                        keyEl.textContent = activeItem.crop ? 'LMB' : '4-8';
+                        textEl.textContent = activeItem.crop ? `Plant ${CROP_DATA[activeItem.crop].name}` : 'Select Seeds [4-8] to Plant';
+                    }
+                }
+            } else {
+                currentTarget = null;
+                crosshair.classList.remove('active');
+                promptEl.classList.add('hidden');
+            }
+        }
+
+        // ==========================================
+        // 15. INPUT CONTROLS
+        // ==========================================
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+
+            if (state.activeModal) {
+                if (e.code === 'Escape' || e.code === 'KeyB' || e.code === 'KeyM' || e.code === 'KeyG' || e.code === 'KeyH') closeModals();
+                return;
+            }
+
+            if (e.code.startsWith('Digit')) {
+                const num = parseInt(e.code.replace('Digit', ''), 10);
+                if (num >= 1 && num <= HOTBAR_ITEMS.length) {
+                    state.selectedSlot = num - 1;
+                    updateActiveToolVisual();
+                }
+            }
+
+            if (e.code === 'KeyC' && state.activeVehicle) {
+                state.vehicleThirdPerson = !state.vehicleThirdPerson;
+                showToast(state.vehicleThirdPerson ? '🎥 Third-Person Chase Camera' : '🎥 First-Person Cab Camera', 'text-sky-300');
+            }
+
+            if (e.code === 'KeyE' && state.isLocked) {
+                if (state.activeVehicle) {
+                    const v = state.activeVehicle;
+                    state.activeVehicle = null;
+                    v.speed = 0;
+                    sfx.stopEngine();
+                    const exitOffset = new THREE.Vector3(-2.6, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), v.heading);
+                    player.pos.copy(v.pos).add(exitOffset);
+                    player.pos.y = player.height;
+                    document.getElementById('vehicle-hud').classList.add('hidden');
+                    updateActiveToolVisual();
+                    showToast(`Exited ${v.name}`, 'text-slate-200');
+                } else {
+                    if (handleWorldInteract(currentTarget)) return;
+
+                    let nearestV = null;
+                    let bestDist = 5.5;
+                    vehicles.forEach(v => {
+                        const d = player.pos.distanceTo(v.pos);
+                        if (d < bestDist) { bestDist = d; nearestV = v; }
+                    });
+                    if (currentTarget && currentTarget.type === 'vehicle') nearestV = currentTarget.vehicle;
+
+                    if (nearestV) {
+                        state.activeVehicle = nearestV;
+                        sfx.startEngine(nearestV.type === 'combine' ? 30 : (nearestV.type === 'pickup' ? 46 : 38));
+                        document.getElementById('vehicle-hud-icon').textContent = nearestV.icon;
+                        document.getElementById('vehicle-hud-title').textContent = `${nearestV.name} Active`;
+                        document.getElementById('vehicle-hud').classList.remove('hidden');
+                        updateActiveToolVisual();
+                        showToast(`Entered ${nearestV.name}!`, 'text-amber-300');
+                    }
+                }
+            }
+
+            if (e.code === 'KeyB' && state.isLocked) openModal('shop');
+            if (e.code === 'KeyM' && state.isLocked) openModal('dealer');
+            if (e.code === 'KeyG' && state.isLocked) openModal('bakery');
+            if (e.code === 'KeyH' && state.isLocked) openModal('crew');
+        });
+
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        window.addEventListener('wheel', (e) => {
+            if (!state.isLocked || state.activeModal) return;
+            if (e.deltaY > 0) state.selectedSlot = (state.selectedSlot + 1) % HOTBAR_ITEMS.length;
+            else state.selectedSlot = (state.selectedSlot - 1 + HOTBAR_ITEMS.length) % HOTBAR_ITEMS.length;
+            updateActiveToolVisual();
+        });
+
+        window.addEventListener('mousedown', (e) => {
+            if (!state.isLocked || state.activeModal) return;
+            if (e.button === 0) performPrimaryAction();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!state.isLocked || state.activeModal) return;
+            const sensitivity = 0.0022;
+            player.yaw -= e.movementX * sensitivity;
+            player.pitch -= e.movementY * sensitivity;
+            player.pitch = Math.max(-Math.PI / 2.2, Math.min(Math.PI / 2.2, player.pitch));
+        });
+
+        const overlayScreen = document.getElementById('overlay-screen');
+        document.getElementById('play-btn').addEventListener('click', () => {
+            sfx.init();
+            canvas.requestPointerLock();
+        });
+
+        document.addEventListener('pointerlockchange', () => {
+            state.isLocked = (document.pointerLockElement === canvas);
+            if (state.isLocked) overlayScreen.classList.add('hidden');
+            else if (!state.activeModal) {
+                overlayScreen.classList.remove('hidden');
+                document.getElementById('play-btn').textContent = 'Resume Farming';
+            }
+        });
+
+        // ==========================================
+        // 16. PHYSICS, COLLISIONS, VEHICLES & SIMULATION LOOP
+        // ==========================================
+        function resolveCollisions(pos, radius) {
+            pos.x = Math.max(-72, Math.min(156, pos.x));
+            pos.z = Math.max(-72, Math.min(72, pos.z));
+
+            // Keep player & vehicles out of river except on South Bridge (Z [10.3, 17.7]) and North Bridge (Z [-35.7, -28.3])
+            const onSouthBridge = (pos.z >= 10.3 && pos.z <= 17.7);
+            const onNorthBridge = (pos.z >= -35.7 && pos.z <= -28.3);
+            if (pos.x > 50.2 && pos.x < 65.8 && !onSouthBridge && !onNorthBridge) {
+                if (pos.x < 58) pos.x = 50.2;
+                else pos.x = 65.8;
+            }
+
+            for (const box of colliders) {
+                const closestX = Math.max(box.minX, Math.min(pos.x, box.maxX));
+                const closestZ = Math.max(box.minZ, Math.min(pos.z, box.maxZ));
+                const dx = pos.x - closestX;
+                const dz = pos.z - closestZ;
+                const distSq = dx * dx + dz * dz;
+                if (distSq < radius * radius) {
+                    const dist = Math.sqrt(distSq) || 0.001;
+                    const overlap = radius - dist;
+                    pos.x += (dx / dist) * overlap;
+                    pos.z += (dz / dist) * overlap;
+                }
+            }
+        }
+
+        function updatePlayer(dt) {
+            const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
+            const right = new THREE.Vector3(Math.cos(player.yaw), 0, -Math.sin(player.yaw));
+
+            const moveDir = new THREE.Vector3();
+            if (keys['KeyW'] || keys['ArrowUp']) moveDir.add(forward);
+            if (keys['KeyS'] || keys['ArrowDown']) moveDir.sub(forward);
+            if (keys['KeyD'] || keys['ArrowRight']) moveDir.add(right);
+            if (keys['KeyA'] || keys['ArrowLeft']) moveDir.sub(right);
+
+            const isMoving = moveDir.lengthSq() > 0;
+            if (isMoving) moveDir.normalize();
+
+            const mealMult = state.mealBuffTimer > 0 ? 1.35 : 1.0;
+            const speed = ((keys['ShiftLeft'] || keys['ShiftRight']) ? 11.8 : 6.9) * mealMult;
+            player.pos.x += moveDir.x * speed * dt;
+            player.pos.z += moveDir.z * speed * dt;
+
+            if (keys['Space'] && player.onGround) {
+                player.vel.y = 6.8;
+                player.onGround = false;
+            }
+            player.vel.y -= 18.0 * dt;
+            player.pos.y += player.vel.y * dt;
+
+            if (player.pos.y <= player.height) {
+                player.pos.y = player.height;
+                player.vel.y = 0;
+                player.onGround = true;
+            }
+
+            resolveCollisions(player.pos, 0.52);
+
+            player.bobTimer = (isMoving && player.onGround) ? player.bobTimer + dt * (speed > 8 ? 13 : 9) : 0;
+            const bobY = Math.sin(player.bobTimer) * 0.045;
+            camera.position.set(player.pos.x, player.pos.y + bobY, player.pos.z);
+            camera.rotation.y = player.yaw;
+            camera.rotation.x = player.pitch;
+
+            if (player.swingTimer > 0) {
+                player.swingTimer = Math.max(0, player.swingTimer - dt * 4.5);
+                const swingAngle = Math.sin(player.swingTimer * Math.PI) * 0.85;
+                viewmodelGroup.rotation.x = -swingAngle;
+                viewmodelGroup.position.z = -0.58 - swingAngle * 0.15;
+            } else {
+                viewmodelGroup.rotation.x = Math.cos(player.bobTimer) * 0.04;
+                viewmodelGroup.position.y = -0.34 + Math.abs(Math.sin(player.bobTimer)) * 0.02;
+                viewmodelGroup.position.z = -0.58;
+            }
+        }
+
+        function updateActiveVehicle(dt) {
+            const v = state.activeVehicle;
+            const friction = 6.0;
+
+            // Auto-refuel if parked right next to Homestead Fuel Pump (-5.5, 10.5)
+            if (Math.hypot(v.pos.x - (-5.5), v.pos.z - 10.5) < 4.5 && v.fuel < 100) {
+                v.fuel = Math.min(100, v.fuel + dt * 35);
+            }
+
+            if (v.fuel > 0) {
+                if (keys['KeyW'] || keys['ArrowUp']) v.speed += v.accel * dt;
+                else if (keys['KeyS'] || keys['ArrowDown']) v.speed -= v.accel * 0.85 * dt;
+                else {
+                    if (Math.abs(v.speed) < 0.25) v.speed = 0;
+                    else v.speed -= Math.sign(v.speed) * friction * dt;
+                }
+            } else {
+                v.speed = 0;
+            }
+            v.speed = Math.max(-v.maxSpeed * 0.5, Math.min(v.maxSpeed, v.speed));
+
+            if (Math.abs(v.speed) > 0.2) {
+                v.fuel = Math.max(0, v.fuel - dt * 0.45);
+            }
+
+            let steerInput = 0;
+            if (keys['KeyA'] || keys['ArrowLeft']) steerInput += 1;
+            if (keys['KeyD'] || keys['ArrowRight']) steerInput -= 1;
+
+            if (Math.abs(v.speed) > 0.25) {
+                const dirSign = v.speed >= 0 ? 1 : -1;
+                v.heading += steerInput * 1.75 * dt * dirSign;
+            }
+
+            const forward = new THREE.Vector3(-Math.sin(v.heading), 0, -Math.cos(v.heading));
+            v.pos.addScaledVector(forward, v.speed * dt);
+            resolveCollisions(v.pos, v.type === 'combine' ? 2.3 : 1.75);
+
+            v.group.position.copy(v.pos);
+            v.group.rotation.y = v.heading;
+
+            v.wheels.forEach(w => { w.children[0].rotation.x -= v.speed * dt * 1.2; });
+            if (v.steeringWheel) v.steeringWheel.rotation.z = steerInput * 0.5;
+            if (v.reelMesh) v.reelMesh.rotation.x -= dt * (4 + Math.abs(v.speed) * 0.8);
+            sfx.updateEnginePitch(Math.abs(v.speed) / v.maxSpeed);
+
+            if (state.vehicleThirdPerson) {
+                const chaseOffset = new THREE.Vector3(0, 5.2, 8.8).applyAxisAngle(new THREE.Vector3(0, 1, 0), v.heading);
+                camera.position.copy(v.pos).add(chaseOffset);
+                camera.rotation.y = v.heading + player.yaw * 0.35;
+                camera.rotation.x = -0.32 + player.pitch * 0.35;
+            } else {
+                const cabPos = v.cabOffset.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), v.heading);
+                camera.position.copy(v.pos).add(cabPos);
+                camera.rotation.y = v.heading + player.yaw * 0.55;
+                camera.rotation.x = player.pitch * 0.65;
+            }
+
+            if (v.swathRadius > 0) {
+                const implementOffsetZ = v.type === 'combine' ? -2.8 : 2.15;
+                const implementPos = new THREE.Vector3(0, 0, implementOffsetZ).applyAxisAngle(new THREE.Vector3(0, 1, 0), v.heading).add(v.pos);
+                const rSq = v.swathRadius * v.swathRadius;
+                let harvestedAny = false;
+                plots.forEach(plot => {
+                    if (!plot.field.owned) return;
+                    const dx = plot.mesh.position.x - implementPos.x;
+                    const dz = plot.mesh.position.z - implementPos.z;
+                    if (dx * dx + dz * dz < rSq) {
+                        if (v.type !== 'combine' && plot.state === 'untilled') {
+                            plot.state = 'tilled'; updatePlotVisuals(plot);
+                            spawnBurst(plot.mesh.position, 0x78350f, 4, 2.2);
+                            sfx.playTill();
+                        } else if (plot.crop && plot.stage === 4) {
+                            const mult = v.type === 'combine' ? 1.25 : 1.0;
+                            if (harvestPlot(plot, mult)) harvestedAny = true;
+                        }
+                    }
+                });
+                if (harvestedAny) { sfx.playHarvest(); updateHUD(); }
+            }
+        }
+
+        let hudSyncTimer = 0;
+        let livestockTimer = 0;
+
+        function updateSimulation(dt, elapsed) {
+            if (state.mealBuffTimer > 0) state.mealBuffTimer = Math.max(0, state.mealBuffTimer - dt);
+            if (state.fishingCooldown > 0) state.fishingCooldown = Math.max(0, state.fishingCooldown - dt);
+
+            if (houseDoorPivot) {
+                const targetRot = houseDoorOpen ? Math.PI * 0.52 : 0;
+                houseDoorPivot.rotation.y += (targetRot - houseDoorPivot.rotation.y) * Math.min(1, dt * 8);
+            }
+            if (fireplaceLight) {
+                fireplaceLight.intensity = 1.0 + Math.sin(elapsed * 11) * 0.22;
+            }
+
+            // Day/Night Cycle
+            state.timeOfDay += dt * 0.1;
+            if (state.timeOfDay >= 24) {
+                state.timeOfDay -= 24;
+                state.day += 1;
+                state.dailySpecial = CROP_KEYS[Math.floor(Math.random() * CROP_KEYS.length)];
+                processDailyPayroll(false);
+                showToast(`🌅 Day ${state.day} has begun!`, 'text-amber-300');
+            }
+
+            // Dynamic Weather
+            state.weatherTimer -= dt;
+            if (state.weatherTimer <= 0) {
+                if (state.weather === 'clear') {
+                    state.weather = 'rain'; state.weatherTimer = 28; rainLines.visible = true;
+                    showToast('🌧️ Rain shower started — naturally watering your crops!', 'text-sky-300');
+                } else {
+                    state.weather = 'clear'; state.weatherTimer = 55; rainLines.visible = false;
+                    showToast('🌤️ The skies have cleared up!', 'text-amber-300');
+                }
+            }
+
+            if (rainLines.visible) {
+                const posArr = rainLines.geometry.attributes.position.array;
+                const center = state.activeVehicle ? state.activeVehicle.pos : player.pos;
+                for (let i = 0; i < posArr.length; i += 3) {
+                    posArr[i + 1] -= 22 * dt;
+                    if (posArr[i + 1] < 0) {
+                        posArr[i] = center.x + (Math.random() - 0.5) * 80;
+                        posArr[i + 1] = 24 + Math.random() * 6;
+                        posArr[i + 2] = center.z + (Math.random() - 0.5) * 80;
+                    }
+                }
+                rainLines.geometry.attributes.position.needsUpdate = true;
+            }
+
+            const sunAngle = ((state.timeOfDay - 6) / 24) * Math.PI * 2;
+            sunLight.position.set(Math.cos(sunAngle) * 85, Math.sin(sunAngle) * 85, 45);
+            sunMesh.position.copy(sunLight.position).multiplyScalar(1.6);
+
+            const daylight = Math.max(0.16, Math.sin(sunAngle));
+            const rainDim = state.weather === 'rain' ? 0.65 : 1.0;
+            sunLight.intensity = daylight * 1.3 * rainDim;
+            hemiLight.intensity = (0.3 + daylight * 0.55) * rainDim;
+
+            const isNight = daylight < 0.3;
+            streetLamps.forEach(pt => { pt.intensity = isNight ? 1.5 : 0.0; });
+
+            const skyColor = new THREE.Color();
+            if (state.weather === 'rain' && daylight > 0.25) skyColor.setHex(0x64748b);
+            else if (daylight > 0.45) skyColor.setHex(0x7dd3fc);
+            else if (daylight > 0.18) skyColor.setHex(0xfdba74);
+            else skyColor.setHex(0x0f172a);
+
+            scene.background.lerp(skyColor, 0.05);
+            scene.fog.color.copy(scene.background);
+
+            clouds.forEach(c => {
+                c.position.x += dt * 1.2;
+                if (c.position.x > 210) c.position.x = -210;
+            });
+            treeCrowns.forEach(tc => { tc.mesh.rotation.z = Math.sin(elapsed * 1.4 + tc.phase) * 0.03; });
+            sprinklersList.forEach(s => { s.head.rotation.y += dt * 4.5; });
+
+            // Orchard Tree Fruit Regrowth
+            orchardTrees.forEach(t => {
+                if (!t.ripe) {
+                    t.growth += dt * 0.04;
+                    if (t.growth >= 1.0) {
+                        t.ripe = true;
+                        t.fruitMeshes.forEach(m => m.visible = true);
+                    }
+                }
+            });
+
+            // Animated Livestock Roaming & Production
+            livestockAnimals.forEach(a => {
+                const dx = a.target.x - a.mesh.position.x;
+                const dz = a.target.z - a.mesh.position.z;
+                const d = Math.hypot(dx, dz);
+                if (d < 0.4) {
+                    const ang = Math.random() * Math.PI * 2;
+                    const rad = Math.random() * a.radius;
+                    a.target.set(a.center.x + Math.cos(ang) * rad, 0, a.center.z + Math.sin(ang) * rad);
+                } else {
+                    a.mesh.position.x += (dx / d) * a.speed * dt;
+                    a.mesh.position.z += (dz / d) * a.speed * dt;
+                    a.mesh.rotation.y = Math.atan2(dx, dz);
+                }
+            });
+
+            livestockTimer += dt;
+            if (livestockTimer >= 16) {
+                livestockTimer = 0;
+                if (state.hasCoop && coopEggsReady < 6) coopEggsReady++;
+                if (state.hasDairy && barnMilkReady < 4) barnMilkReady++;
+            }
+
+            // AI Workers
+            updateAIWorkers(dt);
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= dt;
+                p.vel.y -= 12 * dt;
+                p.mesh.position.addScaledVector(p.vel, dt);
+                p.mesh.scale.setScalar(Math.max(0.01, p.life));
+                if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+            }
+
+            plots.forEach(plot => {
+                if (!plot.field.owned) return;
+                if (state.weather === 'rain' || state.sprinklers) {
+                    if (plot.state === 'tilled') { plot.state = 'watered'; plot.moisture = 1.0; updatePlotVisuals(plot); }
+                    else if (plot.state === 'watered') plot.moisture = 1.0;
+                } else if (plot.state === 'watered') {
+                    plot.moisture -= dt * 0.014;
+                    if (plot.moisture <= 0) { plot.moisture = 0; plot.state = 'tilled'; updatePlotVisuals(plot); }
+                }
+
+                if (plot.crop && plot.growth < 1) {
+                    const waterMult = (plot.state === 'watered') ? 1.85 : 1.0;
+                    const growRate = (1 / CROP_DATA[plot.crop].growTime) * waterMult;
+                    plot.growth = Math.min(1, plot.growth + growRate * dt);
+                    updatePlotVisuals(plot);
+                }
+                if (plot.cropMesh && plot.stage >= 2) {
+                    plot.cropMesh.rotation.z = Math.sin(elapsed * 2.2 + plot.row + plot.col) * 0.04;
+                }
+            });
+
+            hudSyncTimer += dt;
+            if (hudSyncTimer >= 0.4) { hudSyncTimer = 0; updateHUD(); }
+        }
+
+        // ==========================================
+        // 17. MAIN LOOP & RESIZE
+        // ==========================================
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        let lastTime = performance.now();
+        function animate() {
+            requestAnimationFrame(animate);
+            const now = performance.now();
+            const dt = Math.min(0.05, (now - lastTime) / 1000);
+            lastTime = now;
+
+            if (state.isLocked && !state.activeModal) {
+                if (state.activeVehicle) updateActiveVehicle(dt);
+                else updatePlayer(dt);
+                updateInteractionRaycast();
+            }
+
+            updateSimulation(dt, now / 1000);
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() {
+            updateActiveToolVisual();
+            updateHUD();
+            animate();
+        };
+    </script>
+</body>
+</html>
