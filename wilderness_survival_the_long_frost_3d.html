@@ -1,0 +1,4755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>THE LONG FROST 3D - First-Person Wilderness Survival</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #090d12;
+            --panel-bg: rgba(14, 19, 26, 0.85);
+            --panel-border: rgba(255, 255, 255, 0.14);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-orange: #f97316;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: var(--bg-dark);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-main);
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Screen Overlays: Frost & Damage */
+        #frost-vignette {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            box-shadow: inset 0 0 110px rgba(0, 0, 0, 0.7);
+            transition: box-shadow 0.4s ease;
+            z-index: 3;
+        }
+
+        #damage-flash {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background: radial-gradient(circle, transparent 50%, rgba(220, 38, 38, 0.55) 100%);
+            opacity: 0;
+            transition: opacity 0.15s ease-out;
+            z-index: 4;
+        }
+
+        /* First-Person Crosshair */
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 18px;
+            height: 18px;
+            pointer-events: none;
+            z-index: 15;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background: rgba(255, 255, 255, 0.85);
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+            border-radius: 1px;
+            transition: transform 0.1s ease, background-color 0.15s ease;
+        }
+
+        #crosshair::before { width: 2px; height: 14px; }
+        #crosshair::after { width: 14px; height: 2px; }
+
+        #crosshair.active::before, #crosshair.active::after {
+            background: var(--accent-amber);
+            transform: scale(1.25);
+        }
+
+        /* Hunting Rifle Scope Overlay */
+        #scope-overlay {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 14;
+            display: none;
+            background: radial-gradient(circle at center, transparent 28%, rgba(4, 7, 11, 0.96) 44%);
+        }
+
+        #scope-overlay.active {
+            display: block;
+        }
+
+        #scope-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 56vmin;
+            height: 56vmin;
+            border: 3px solid rgba(15, 23, 42, 0.95);
+            border-radius: 50%;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.12), inset 0 0 28px rgba(0, 0, 0, 0.85);
+        }
+
+        #scope-ring::before, #scope-ring::after {
+            content: '';
+            position: absolute;
+            background: rgba(15, 23, 42, 0.85);
+        }
+
+        #scope-ring::before {
+            top: 0;
+            bottom: 0;
+            left: 50%;
+            width: 1.5px;
+            transform: translateX(-50%);
+        }
+
+        #scope-ring::after {
+            left: 0;
+            right: 0;
+            top: 50%;
+            height: 1.5px;
+            transform: translateY(-50%);
+        }
+
+        #scope-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 5px;
+            height: 5px;
+            background: #ef4444;
+            border-radius: 50%;
+            box-shadow: 0 0 6px #ef4444;
+        }
+
+        /* Glassmorphism HUD Panels */
+        .hud-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+        }
+
+        /* Top Left: Vitals */
+        #vitals-panel {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            width: 245px;
+            padding: 14px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 9px;
+        }
+
+        .vital-row {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .vital-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .vital-header span:last-child {
+            color: var(--text-main);
+        }
+
+        .bar-bg {
+            width: 100%;
+            height: 7px;
+            background: rgba(255, 255, 255, 0.09);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            transition: width 0.2s ease, background-color 0.3s ease;
+        }
+
+        #health-bar { background: linear-gradient(90deg, #b91c1c, #ef4444); width: 100%; }
+        #stamina-bar { background: linear-gradient(90deg, #059669, #10b981); width: 100%; }
+        #temp-bar { background: linear-gradient(90deg, #06b6d4, #f97316); width: 85%; }
+
+        .status-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 2px;
+        }
+
+        .badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 7px;
+            border-radius: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            animation: pulse 2s infinite;
+        }
+
+        .badge-cold { background: rgba(6, 182, 212, 0.22); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.45); }
+        .badge-wet { background: rgba(59, 130, 246, 0.22); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.45); }
+        .badge-warm { background: rgba(249, 115, 22, 0.22); color: #fdba74; border: 1px solid rgba(249, 115, 22, 0.45); }
+        .badge-danger { background: rgba(239, 68, 68, 0.28); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.55); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.65; }
+        }
+
+        /* Top Center: Compass */
+        #compass-panel {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 18px;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+        }
+
+        #compass-dir {
+            color: var(--accent-amber);
+            font-size: 14px;
+            min-width: 28px;
+            text-align: center;
+        }
+
+        /* Top Right: Environment */
+        #env-panel {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 12px 16px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 7px;
+        }
+
+        .day-display {
+            font-family: 'Cinzel', serif;
+            font-size: 17px;
+            font-weight: 800;
+            color: var(--accent-amber);
+            letter-spacing: 0.06em;
+        }
+
+        .env-details {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            color: var(--text-main);
+        }
+
+        .env-controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            transform: translateY(-1px);
+        }
+
+        /* Pointer Lock Resume Banner */
+        #lock-banner {
+            position: absolute;
+            top: 64px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.5);
+            color: #fde68a;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 18;
+            cursor: pointer;
+            display: none;
+        }
+
+        /* Survival Log (Bottom Left) */
+        #log-panel {
+            position: absolute;
+            bottom: 94px;
+            left: 16px;
+            width: 310px;
+            max-height: 145px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 4px;
+            pointer-events: none;
+            z-index: 9;
+        }
+
+        .log-entry {
+            background: rgba(11, 15, 21, 0.78);
+            border-left: 3px solid var(--accent-amber);
+            padding: 5px 10px;
+            border-radius: 0 6px 6px 0;
+            font-size: 12px;
+            color: #e2e8f0;
+            animation: fadeInLog 0.25s ease;
+        }
+
+        .log-entry.warn { border-left-color: var(--accent-red); color: #fca5a5; }
+        .log-entry.good { border-left-color: var(--accent-green); color: #a7f3d0; }
+
+        @keyframes fadeInLog {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* Floating Interaction Prompt */
+        #interaction-hint {
+            position: absolute;
+            top: calc(50% + 26px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(11, 15, 21, 0.85);
+            border: 1px solid rgba(245, 158, 11, 0.5);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fde68a;
+            pointer-events: none;
+            display: none;
+            z-index: 15;
+            white-space: nowrap;
+        }
+
+        /* Bottom Center: Hotbar / Inventory */
+        #inventory-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            z-index: 12;
+        }
+
+        .inv-slot {
+            width: 54px;
+            height: 54px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 10px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .inv-slot:hover {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: rgba(255, 255, 255, 0.35);
+        }
+
+        .inv-slot.selected {
+            border: 2px solid var(--accent-amber);
+            background: rgba(245, 158, 11, 0.18);
+            box-shadow: 0 0 14px rgba(245, 158, 11, 0.35);
+            transform: translateY(-2px);
+        }
+
+        .slot-key {
+            position: absolute;
+            top: 3px;
+            left: 5px;
+            font-size: 9px;
+            color: var(--text-muted);
+            font-weight: 700;
+        }
+
+        .slot-icon {
+            font-size: 22px;
+            line-height: 1;
+        }
+
+        .slot-count {
+            position: absolute;
+            bottom: 3px;
+            right: 5px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            text-shadow: 0 1px 3px #000;
+        }
+
+        .durability-bar {
+            position: absolute;
+            bottom: 3px;
+            left: 5px;
+            right: 5px;
+            height: 3px;
+            background: rgba(0, 0, 0, 0.65);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .durability-fill {
+            height: 100%;
+            background: var(--accent-green);
+        }
+
+        /* Vehicle Driving HUD */
+        #vehicle-hud {
+            position: absolute;
+            bottom: 112px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 18px;
+            z-index: 15;
+            display: none;
+            align-items: center;
+            gap: 14px;
+            border-color: rgba(245, 158, 11, 0.55);
+            font-size: 13px;
+            font-weight: 700;
+            color: #fde68a;
+        }
+
+        #vehicle-hud.active {
+            display: flex;
+        }
+
+        #equipped-label {
+            position: absolute;
+            bottom: 84px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: 600;
+            color: #e2e8f0;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+            pointer-events: none;
+            z-index: 12;
+        }
+
+        /* Crafting Overlay Modal */
+        #crafting-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 440px;
+            max-width: calc(100vw - 32px);
+            max-height: 78vh;
+            display: none;
+            flex-direction: column;
+            z-index: 30;
+            overflow: hidden;
+        }
+
+        #crafting-panel.open {
+            display: flex;
+        }
+
+        .panel-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 10px 14px 0;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            padding: 6px 12px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .tab-btn.active {
+            color: var(--accent-amber);
+            border-bottom-color: var(--accent-amber);
+        }
+
+        /* Storage Chest Modal */
+        #storage-panel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 480px;
+            max-width: calc(100vw - 32px);
+            display: none;
+            flex-direction: column;
+            z-index: 32;
+            overflow: hidden;
+        }
+
+        #storage-panel.open {
+            display: flex;
+        }
+
+        .storage-body {
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .storage-section-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+        }
+
+        .storage-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 6px;
+        }
+
+        .storage-slot {
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 8px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 19px;
+            transition: background 0.12s;
+        }
+
+        .storage-slot:hover {
+            background: rgba(245, 158, 11, 0.22);
+            border-color: var(--accent-amber);
+        }
+
+        /* Build Mode HUD Overlay */
+        #build-hud {
+            position: absolute;
+            bottom: 92px;
+            right: 16px;
+            width: 295px;
+            padding: 13px 15px;
+            z-index: 16;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            border-color: rgba(16, 185, 129, 0.45);
+        }
+
+        #build-hud.active {
+            display: flex;
+        }
+
+        .build-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #34d399;
+        }
+
+        .build-piece-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        .build-piece-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .build-cost-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            font-size: 12px;
+            padding: 6px 8px;
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 6px;
+        }
+
+        .build-controls-help {
+            font-size: 10.5px;
+            color: var(--text-muted);
+            line-height: 1.5;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            padding-top: 6px;
+        }
+
+        .build-controls-help strong {
+            color: #e2e8f0;
+        }
+
+        .panel-header {
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h3 {
+            font-family: 'Cinzel', serif;
+            font-size: 16px;
+            letter-spacing: 0.06em;
+            color: var(--accent-amber);
+        }
+
+        .craft-list {
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .craft-item {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 9px;
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.15s;
+        }
+
+        .craft-item:hover {
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+        .craft-info {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+        }
+
+        .craft-title {
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .craft-desc {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .craft-reqs {
+            font-size: 11px;
+            margin-top: 3px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .req-ok { color: #34d399; font-weight: 600; }
+        .req-no { color: #f87171; }
+
+        .craft-btn {
+            background: var(--accent-amber);
+            color: #000;
+            border: none;
+            border-radius: 7px;
+            padding: 7px 14px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: transform 0.1s;
+        }
+
+        .craft-btn:hover:not(:disabled) {
+            transform: scale(1.04);
+        }
+
+        .craft-btn:disabled {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        /* Start & Game Over Screens */
+        .overlay-screen {
+            position: absolute;
+            inset: 0;
+            background: rgba(7, 10, 15, 0.88);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .overlay-box {
+            max-width: 540px;
+            width: 100%;
+            background: rgba(16, 22, 30, 0.96);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 16px;
+            padding: 32px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+        }
+
+        .overlay-box h1 {
+            font-family: 'Cinzel', serif;
+            font-size: 32px;
+            color: var(--accent-amber);
+            margin-bottom: 8px;
+            letter-spacing: 0.08em;
+        }
+
+        .overlay-box p.subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 22px;
+            line-height: 1.5;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            text-align: left;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 16px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .controls-grid div strong {
+            color: var(--accent-amber);
+        }
+
+        .primary-btn {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: #000;
+            border: none;
+            border-radius: 10px;
+            padding: 14px 34px;
+            font-size: 15px;
+            font-weight: 800;
+            cursor: pointer;
+            letter-spacing: 0.05em;
+            transition: transform 0.15s, box-shadow 0.15s;
+            box-shadow: 0 4px 22px rgba(245, 158, 11, 0.4);
+        }
+
+        .primary-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 28px rgba(245, 158, 11, 0.65);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin: 20px 0 28px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .stat-val {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--accent-amber);
+        }
+
+        .stat-lbl {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 2px;
+        }
+
+        @media (max-width: 768px) {
+            #vitals-panel { width: 185px; padding: 10px; }
+            #log-panel { display: none; }
+            .inv-slot { width: 42px; height: 42px; }
+            .controls-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="frost-vignette"></div>
+    <div id="damage-flash"></div>
+    <div id="crosshair"></div>
+    <div id="scope-overlay">
+        <div id="scope-ring">
+            <div id="scope-dot"></div>
+        </div>
+    </div>
+
+    <!-- Top Left: Vitals -->
+    <div id="vitals-panel" class="hud-panel">
+        <div class="vital-row">
+            <div class="vital-header"><span>Health</span><span id="val-health">100%</span></div>
+            <div class="bar-bg"><div id="health-bar" class="bar-fill"></div></div>
+        </div>
+        <div class="vital-row">
+            <div class="vital-header"><span>Stamina</span><span id="val-stamina">100%</span></div>
+            <div class="bar-bg"><div id="stamina-bar" class="bar-fill"></div></div>
+        </div>
+        <div class="vital-row">
+            <div class="vital-header"><span>Body Temp</span><span id="val-temp">37.0°C</span></div>
+            <div class="bar-bg"><div id="temp-bar" class="bar-fill"></div></div>
+        </div>
+        <div class="status-badges" id="status-badges"></div>
+    </div>
+
+    <!-- Top Center: Compass -->
+    <div id="compass-panel" class="hud-panel">
+        <span id="comp-left">NW</span>
+        <span id="compass-dir">N</span>
+        <span id="comp-right">NE</span>
+    </div>
+
+    <div id="lock-banner">Click screen to lock mouse look</div>
+
+    <!-- Top Right: Environment -->
+    <div id="env-panel" class="hud-panel">
+        <div class="day-display" id="day-display">DAY 1 • 08:00</div>
+        <div class="env-details">
+            <span id="season-display">🌸 Spring</span>
+            <span>|</span>
+            <span id="weather-display">☀️ Clear</span>
+            <span>|</span>
+            <span id="ambient-temp">12°C</span>
+        </div>
+        <div class="env-controls">
+            <button class="icon-btn" id="btn-build" title="Toggle Build Mode (B)">🏗️ Build [B]</button>
+            <button class="icon-btn" id="btn-craft" title="Toggle Crafting (C)">🔨 Craft [C]</button>
+            <button class="icon-btn" id="btn-sleep" title="Rest near Bed/Shelter/Fire">💤 Rest</button>
+            <button class="icon-btn" id="btn-save" title="Save Progress Now">💾 Save</button>
+            <button class="icon-btn" id="btn-mute" title="Toggle Audio">🔊</button>
+        </div>
+    </div>
+
+    <!-- Survival Log -->
+    <div id="log-panel"></div>
+
+    <!-- Floating Interaction Prompt -->
+    <div id="interaction-hint">Press [E] to Gather</div>
+
+    <!-- Build Mode HUD -->
+    <div id="build-hud" class="hud-panel">
+        <div class="build-header">
+            <span>🏗️ Build Mode</span>
+            <span id="build-snap-badge">Free Place</span>
+        </div>
+        <div class="build-piece-title" id="build-piece-name">🛏️ Wooden Bed</div>
+        <div class="build-piece-desc" id="build-piece-desc">Sets your home respawn point.</div>
+        <div class="build-cost-row" id="build-piece-cost"></div>
+        <div class="build-controls-help">
+            <strong>[Click]</strong> Place • <strong>[R]</strong> Rotate • <strong>[Q / Scroll / 1-8]</strong> Cycle<br>
+            <strong>[X / Right-Click]</strong> Salvage • <strong>[B]</strong> Exit Build Mode
+        </div>
+    </div>
+
+    <!-- Vehicle Driving HUD -->
+    <div id="vehicle-hud" class="hud-panel">
+        <span>🏍️ 4x4 ATV</span>
+        <span>|</span>
+        <span id="atv-speed">0 km/h</span>
+        <span>|</span>
+        <span>[W/S] Drive • [A/D] Steer • [F] Dismount</span>
+    </div>
+
+    <!-- Fishing Status HUD -->
+    <div id="fishing-hud" class="hud-panel" style="position: absolute; bottom: 112px; left: 50%; transform: translateX(-50%); padding: 8px 18px; z-index: 15; display: none; align-items: center; gap: 12px; border-color: rgba(6, 182, 212, 0.55); font-size: 13px; font-weight: 700; color: #67e8f9;">
+        <span id="fishing-status-text">🎣 Bobber in water... Wait for a bite!</span>
+        <span>|</span>
+        <span>[Click / E] Reel In</span>
+    </div>
+
+    <!-- Bottom Center: Equipped Label & Hotbar -->
+    <div id="equipped-label">Empty Hands</div>
+    <div id="inventory-bar" class="hud-panel"></div>
+
+    <!-- Crafting & Blueprints Modal -->
+    <div id="crafting-panel" class="hud-panel">
+        <div class="panel-header">
+            <h3>SURVIVAL CRAFTING</h3>
+            <button class="icon-btn" id="btn-close-craft">✕</button>
+        </div>
+        <div class="panel-tabs">
+            <button class="tab-btn active" id="tab-craft">Tools &amp; Cooking</button>
+            <button class="tab-btn" id="tab-build">Structures &amp; Appliances</button>
+        </div>
+        <div class="craft-list" id="craft-list"></div>
+    </div>
+
+    <!-- Storage Chest Modal -->
+    <div id="storage-panel" class="hud-panel">
+        <div class="panel-header">
+            <h3>WOODEN STORAGE CHEST</h3>
+            <button class="icon-btn" id="btn-close-storage">✕</button>
+        </div>
+        <div class="storage-body">
+            <div>
+                <div class="storage-section-title">Chest Inventory (Click to Withdraw)</div>
+                <div class="storage-grid" id="chest-grid"></div>
+            </div>
+            <div>
+                <div class="storage-section-title">Your Backpack (Click to Deposit)</div>
+                <div class="storage-grid" id="player-storage-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="overlay-screen">
+        <div class="overlay-box">
+            <h1>THE LONG FROST 3D</h1>
+            <p class="subtitle">Survive the northern wilderness. Gather timber &amp; stone, build your cabin with appliances and a respawn bed, and keep warm through freezing nights.</p>
+            <div class="controls-grid">
+                <div><strong>[W A S D]</strong> Move &amp; Sprint <strong>[Shift]</strong></div>
+                <div><strong>[Mouse]</strong> Look • <strong>[Space]</strong> Jump</div>
+                <div><strong>[Left Click / E]</strong> Gather &amp; Use</div>
+                <div><strong>[B]</strong> Build Mode • <strong>[C]</strong> Crafting</div>
+                <div><strong>[R]</strong> Rotate Build • <strong>[X]</strong> Salvage</div>
+                <div><strong>[1 - 8 / Scroll]</strong> Select Slot</div>
+            </div>
+            <button class="primary-btn" id="btn-start">ENTER THE WILDERNESS</button>
+        </div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="overlay-screen" style="display: none;">
+        <div class="overlay-box">
+            <h1 style="color: var(--accent-red);">YOU PERISHED</h1>
+            <p class="subtitle" id="death-cause">Hypothermia froze your core in the bitter cold.</p>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-val" id="stat-days">1</div>
+                    <div class="stat-lbl">Days Survived</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="stat-gathered">0</div>
+                    <div class="stat-lbl">Resources Gathered</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="stat-crafted">0</div>
+                    <div class="stat-lbl">Items &amp; Builds</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val" id="stat-hunted">0</div>
+                    <div class="stat-lbl">Wildlife Hunted</div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+                <button class="primary-btn" id="btn-respawn-bed" style="display: none; background: linear-gradient(135deg, #10b981, #059669);">🛏️ RESPAWN AT BED</button>
+                <button class="primary-btn" id="btn-restart">NEW EXPEDITION</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==========================================
+// 0. SAVE / LOAD SYSTEM (LOCAL STORAGE)
+// ==========================================
+const SAVE_KEY = 'the_long_frost_3d_save_v1';
+let savedGameData = null;
+
+async function initCloudStorage() {
+    try {
+        const raw = localStorage.getItem(SAVE_KEY);
+        if (raw) {
+            savedGameData = JSON.parse(raw);
+            const startBtn = document.getElementById('btn-start');
+            if (startBtn && savedGameData.day) {
+                startBtn.textContent = `CONTINUE EXPEDITION (DAY ${savedGameData.day})`;
+            }
+        }
+    } catch (err) {
+        console.warn('Could not load saved game:', err);
+    }
+}
+
+function saveGameProgress(silent = false) {
+    if (!state.running || state.gameOver) return;
+    try {
+        const serializedStructures = state.structures.map(s => ({
+            type: s.type,
+            x: s.x,
+            y: s.y,
+            z: s.z,
+            rot: s.rot,
+            doorOpen: !!s.doorOpen,
+            fuel: s.fuel || 0,
+            storage: s.storage ? JSON.stringify(s.storage) : null
+        }));
+
+        const payload = {
+            day: state.day,
+            timeOfDay: state.timeOfDay,
+            weather: state.weather,
+            playerPos: { x: state.player.pos.x, y: state.player.pos.y, z: state.player.pos.z },
+            playerYaw: state.player.yaw,
+            playerPitch: state.player.pitch,
+            health: state.player.health,
+            stamina: state.player.stamina,
+            bodyTemp: state.player.bodyTemp,
+            wetness: state.player.wetness,
+            selectedSlot: state.player.selectedSlot,
+            inventory: JSON.stringify(state.player.inventory),
+            spawnPoint: state.spawnPoint,
+            stats: state.stats,
+            structures: JSON.stringify(serializedStructures),
+            vehicles: JSON.stringify(state.vehicles.map(v => ({ x: v.x, y: v.y, z: v.z, yaw: v.yaw })))
+        };
+
+        localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
+        savedGameData = payload;
+        if (!silent) addLog("Progress saved!", "good");
+    } catch (err) {
+        if (!silent) addLog("Could not save progress right now.", "warn");
+    }
+}
+
+// ==========================================
+// 1. PROCEDURAL WEB AUDIO ENGINE
+// ==========================================
+class SoundEngine {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.ambienceGain = null;
+        this.fireGain = null;
+        this.initialized = false;
+    }
+
+    init() {
+        if (this.initialized) return;
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioCtx();
+
+            const bufferSize = this.ctx.sampleRate * 3;
+            const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            const windSrc = this.ctx.createBufferSource();
+            windSrc.buffer = noiseBuffer;
+            windSrc.loop = true;
+
+            const windFilter = this.ctx.createBiquadFilter();
+            windFilter.type = 'lowpass';
+            windFilter.frequency.value = 320;
+
+            this.ambienceGain = this.ctx.createGain();
+            this.ambienceGain.gain.value = 0.04;
+
+            windSrc.connect(windFilter);
+            windFilter.connect(this.ambienceGain);
+            this.ambienceGain.connect(this.ctx.destination);
+            windSrc.start();
+
+            const fireSrc = this.ctx.createBufferSource();
+            fireSrc.buffer = noiseBuffer;
+            fireSrc.loop = true;
+
+            const fireFilter = this.ctx.createBiquadFilter();
+            fireFilter.type = 'bandpass';
+            fireFilter.frequency.value = 950;
+            fireFilter.Q.value = 1.4;
+
+            this.fireGain = this.ctx.createGain();
+            this.fireGain.gain.value = 0;
+
+            fireSrc.connect(fireFilter);
+            fireFilter.connect(this.fireGain);
+            this.fireGain.connect(this.ctx.destination);
+            fireSrc.start();
+
+            this.initialized = true;
+        } catch (e) {
+            console.warn("Audio unavailable:", e);
+        }
+    }
+
+    toggleMute() {
+        this.muted = !this.muted;
+        if (this.ctx) {
+            if (this.muted) this.ctx.suspend();
+            else this.ctx.resume();
+        }
+        return this.muted;
+    }
+
+    updateAmbience(weather, nearFireRatio) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        let targetWind = 0.03;
+        if (weather === 'wind') targetWind = 0.13;
+        if (weather === 'rain') targetWind = 0.11;
+        this.ambienceGain.gain.setTargetAtTime(targetWind, now, 0.5);
+        this.fireGain.gain.setTargetAtTime(nearFireRatio * 0.09, now, 0.3);
+    }
+
+    playStep(inWater) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = inWater ? 'sine' : 'triangle';
+        osc.frequency.setValueAtTime(inWater ? 190 : 78, now);
+        osc.frequency.exponentialRampToValueAtTime(inWater ? 60 : 32, now + 0.09);
+        gain.gain.setValueAtTime(inWater ? 0.1 : 0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.11);
+    }
+
+    playChop(isStone = false) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = isStone ? 'square' : 'sawtooth';
+        osc.frequency.setValueAtTime(isStone ? 520 : 140, now);
+        osc.frequency.exponentialRampToValueAtTime(isStone ? 120 : 42, now + 0.13);
+        gain.gain.setValueAtTime(0.14, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.15);
+    }
+
+    playCraft() {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        [330, 440, 587].forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + i * 0.06);
+            gain.gain.setValueAtTime(0.1, now + i * 0.06);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.16);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + i * 0.06);
+            osc.stop(now + i * 0.06 + 0.17);
+        });
+    }
+
+    playBuildHammer() {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        [180, 260].forEach((freq, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + i * 0.08);
+            osc.frequency.exponentialRampToValueAtTime(65, now + i * 0.08 + 0.11);
+            gain.gain.setValueAtTime(0.16, now + i * 0.08);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.12);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + i * 0.08);
+            osc.stop(now + i * 0.08 + 0.13);
+        });
+    }
+
+    playDoorCreak(opening) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(opening ? 130 : 190, now);
+        osc.frequency.linearRampToValueAtTime(opening ? 210 : 110, now + 0.22);
+        gain.gain.setValueAtTime(0.07, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+    }
+
+    playConsume(isDrink = false) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(isDrink ? 280 : 210, now);
+        osc.frequency.linearRampToValueAtTime(isDrink ? 460 : 150, now + 0.16);
+        gain.gain.setValueAtTime(0.11, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.19);
+    }
+
+    playGunshot() {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+
+        // Heavy low-end boom
+        const osc = this.ctx.createOscillator();
+        const oscGain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(175, now);
+        osc.frequency.exponentialRampToValueAtTime(28, now + 0.28);
+        oscGain.gain.setValueAtTime(0.32, now);
+        oscGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(oscGain);
+        oscGain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.31);
+
+        // High-frequency crackle burst
+        const bufSize = Math.floor(this.ctx.sampleRate * 0.35);
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) {
+            data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.08));
+        }
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1200;
+        const nGain = this.ctx.createGain();
+        nGain.gain.setValueAtTime(0.35, now);
+        nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        noise.connect(filter);
+        filter.connect(nGain);
+        nGain.connect(this.ctx.destination);
+        noise.start(now);
+    }
+
+    playEngineHum(speedRatio) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(42 + speedRatio * 55, now);
+        gain.gain.setValueAtTime(0.035, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+
+    playSplash(big = false) {
+        if (!this.initialized || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(big ? 380 : 240, now);
+        osc.frequency.exponentialRampToValueAtTime(big ? 120 : 80, now + (big ? 0.25 : 0.15));
+        gain.gain.setValueAtTime(big ? 0.18 : 0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (big ? 0.26 : 0.16));
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + (big ? 0.27 : 0.17));
+    }
+}
+
+const sound = new SoundEngine();
+
+// ==========================================
+// 2. ITEMS, RECIPES & 3D BUILDING BLUEPRINTS
+// ==========================================
+const ITEMS = {
+    wood: { name: 'Firewood & Logs', icon: '🪵', stackable: true, desc: 'Dense pine logs for building cabins and fueling fires.' },
+    stone: { name: 'Flint & Stone', icon: '🪨', stackable: true, desc: 'Sharp river stone for tools, braziers and fire rings.' },
+    fiber: { name: 'Plant Fiber', icon: '🌿', stackable: true, desc: 'Tough grass fibers for cordage, hinges and roofs.' },
+    berries: { name: 'Wild Berries', icon: '🫐', stackable: true, edible: true, health: 8, stamina: 15, desc: 'Ripe forest berries. Restores +8 Health & +15 Stamina.' },
+    mushroom: { name: 'Wild Mushroom', icon: '🍄', stackable: true, edible: true, health: -4, stamina: 20, desc: 'Raw mushroom. Boosts stamina (+20), mildly toxic raw (-4 HP).' },
+    raw_meat: { name: 'Raw Venison', icon: '🥩', stackable: true, edible: true, health: -10, stamina: 15, desc: 'Raw meat. Cook at a campfire to avoid illness!' },
+    cooked_meat: { name: 'Roasted Meat', icon: '🍖', stackable: true, edible: true, health: 28, stamina: 35, warmth: 1.8, desc: 'Hearty fire-roasted meat. Restores +28 Health, +35 Stamina & warmth.' },
+    dirty_water: { name: 'Murky Water', icon: '🫙', stackable: true, edible: true, health: -8, stamina: 15, desc: 'Unfiltered river water. Boil at a campfire first.' },
+    clean_water: { name: 'Boiled Water', icon: '💧', stackable: true, edible: true, health: 14, stamina: 40, warmth: 1.4, desc: 'Purified warm water. Restores +14 Health, +40 Stamina & warmth.' },
+    axe: { name: 'Stone Hatchet', icon: '🪓', stackable: false, maxDurability: 55, tool: 'axe', desc: 'Chops pine trees 2.5x faster.' },
+    spear: { name: 'Wooden Spear', icon: '🗡️', stackable: false, maxDurability: 40, tool: 'spear', desc: 'Long-reach hunting & self-defense spear.' },
+    torch: { name: 'Lit Torch', icon: '🔥', stackable: false, maxDurability: 80, tool: 'torch', desc: 'Casts warm 3D light and raises body temperature.' },
+    rifle: { name: 'Hunting Rifle', icon: '🔫', stackable: false, maxDurability: 100, tool: 'rifle', desc: 'Long-range bolt-action hunting rifle. Requires Rifle Ammo.' },
+    ammo: { name: 'Rifle Ammo', icon: '🧨', stackable: true, desc: 'High-velocity hunting cartridges for the Hunting Rifle.' },
+    fishing_rod: { name: 'Wooden Fishing Rod', icon: '🎣', stackable: false, maxDurability: 60, tool: 'fishing_rod', desc: 'Cast into the river to catch fresh trout.' },
+    raw_fish: { name: 'Raw River Trout', icon: '🐟', stackable: true, edible: true, health: -5, stamina: 12, desc: 'Freshly caught trout. Roast at a fire for hearty nutrition!' },
+    cooked_fish: { name: 'Grilled River Trout', icon: '🍣', stackable: true, edible: true, health: 24, stamina: 32, warmth: 1.6, desc: 'Fire-grilled trout. Restores +24 Health, +32 Stamina & warmth.' }
+};
+
+const RECIPES = [
+    { id: 'fishing_rod', name: 'Wooden Fishing Rod', icon: '🎣', desc: 'Cast into the river to catch fresh trout.', reqs: { wood: 3, fiber: 3 }, type: 'item', result: 'fishing_rod' },
+    { id: 'axe', name: 'Stone Hatchet', icon: '🪓', desc: 'Essential tool for felling pine trees rapidly.', reqs: { wood: 3, stone: 2, fiber: 2 }, type: 'item', result: 'axe' },
+    { id: 'spear', name: 'Wooden Spear', icon: '🗡️', desc: 'Hunt deer or fend off wolves at safe range.', reqs: { wood: 4, stone: 1, fiber: 2 }, type: 'item', result: 'spear' },
+    { id: 'rifle', name: 'Hunting Rifle', icon: '🔫', desc: 'Precision long-range rifle for hunting game.', reqs: { wood: 5, stone: 4, fiber: 2 }, type: 'item', result: 'rifle' },
+    { id: 'ammo', name: 'Rifle Ammo (x6)', icon: '🧨', desc: 'Crafts 6 rounds of hunting ammunition.', reqs: { stone: 2, wood: 1 }, type: 'item', result: 'ammo', count: 6 },
+    { id: 'torch', name: 'Lit Torch', icon: '🔥', desc: 'Portable warmth and 3D light source.', reqs: { wood: 2, fiber: 2 }, type: 'item', result: 'torch' },
+    { id: 'cooked_fish', name: 'Grill River Trout', icon: '🍣', desc: 'Requires a burning campfire, wood stove, or hearth nearby.', reqs: { raw_fish: 1 }, nearFire: true, type: 'item', result: 'cooked_fish' },
+    { id: 'cooked_meat', name: 'Roast Venison', icon: '🍖', desc: 'Requires a burning campfire, wood stove, or hearth nearby.', reqs: { raw_meat: 1 }, nearFire: true, type: 'item', result: 'cooked_meat' },
+    { id: 'clean_water', name: 'Boil River Water', icon: '💧', desc: 'Purifies murky water at a fire, stove, or hearth.', reqs: { dirty_water: 1 }, nearFire: true, type: 'item', result: 'clean_water' }
+];
+
+const BUILD_PIECES = [
+    {
+        id: 'atv',
+        name: '4x4 Wilderness ATV',
+        icon: '🏍️',
+        desc: 'All-terrain quad bike for fast travel across the valley ([E] to ride, [F] to exit).',
+        reqs: { wood: 6, stone: 5, fiber: 4 },
+        snapMode: 'free',
+        isVehicle: true
+    },
+    {
+        id: 'bed',
+        name: 'Wooden Bed (Respawn Point)',
+        icon: '🛏️',
+        desc: 'Sets your home respawn point when you perish and lets you rest comfortably.',
+        reqs: { wood: 5, fiber: 4 },
+        snapMode: 'free',
+        providesShelter: true,
+        interactive: 'bed'
+    },
+    {
+        id: 'wood_stove',
+        name: 'Cast-Iron Wood Stove',
+        icon: '♨️',
+        desc: 'Indoor heating & cooking appliance. Radiates strong warmth and cooks meals.',
+        reqs: { stone: 5, wood: 3 },
+        snapMode: 'free',
+        isFire: true,
+        interactive: 'appliance'
+    },
+    {
+        id: 'hearth',
+        name: 'Stone Hearth Fireplace',
+        icon: '🧱',
+        desc: 'Masonry cabin fireplace with chimney. Warms a large room and cooks food.',
+        reqs: { stone: 6, wood: 4 },
+        snapMode: 'free',
+        isFire: true,
+        interactive: 'appliance'
+    },
+    {
+        id: 'workbench',
+        name: 'Craftsman Workbench',
+        icon: '🪚',
+        desc: 'Sturdy timber worktable with vise & tools for organizing your cabin.',
+        reqs: { wood: 5, stone: 2, fiber: 2 },
+        snapMode: 'free',
+        interactive: 'workbench'
+    },
+    {
+        id: 'water_well',
+        name: 'Stone Water Well',
+        icon: '🪣',
+        desc: 'Covered stone well providing fresh, clean drinking water right at your base ([E]).',
+        reqs: { stone: 5, wood: 3, fiber: 2 },
+        snapMode: 'free',
+        interactive: 'well'
+    },
+    {
+        id: 'foundation',
+        name: 'Log Foundation',
+        icon: '🟫',
+        desc: 'Elevated 4x4m timber deck that levels uneven ground and snaps walls.',
+        reqs: { wood: 4, fiber: 1 },
+        snapMode: 'foundation',
+        walkable: true,
+        deckHeight: 0.55
+    },
+    {
+        id: 'wall',
+        name: 'Log Wall',
+        icon: '🧱',
+        desc: 'Solid horizontal timber wall. Blocks wind and wildlife.',
+        reqs: { wood: 3, fiber: 1 },
+        snapMode: 'edge',
+        blocksMovement: true
+    },
+    {
+        id: 'doorway',
+        name: 'Log Doorway & Door',
+        icon: '🚪',
+        desc: 'Framed entryway with a hinged wooden door ([E] to open/close).',
+        reqs: { wood: 4, fiber: 2 },
+        snapMode: 'edge',
+        blocksMovement: true,
+        interactive: 'door'
+    },
+    {
+        id: 'roof',
+        name: 'Slanted Timber Roof',
+        icon: '🏠',
+        desc: 'Snaps onto foundations or walls to shelter you from rain and cold.',
+        reqs: { wood: 4, fiber: 2 },
+        snapMode: 'roof',
+        providesShelter: true
+    },
+    {
+        id: 'stairs',
+        name: 'Wooden Stairs / Ramp',
+        icon: '🪜',
+        desc: 'Walkable timber ramp connecting terrain up to a Log Foundation.',
+        reqs: { wood: 3, fiber: 1 },
+        snapMode: 'edge',
+        walkable: true,
+        isRamp: true
+    },
+    {
+        id: 'palisade',
+        name: 'Defensive Spike Palisade',
+        icon: '🪵',
+        desc: 'Sharpened log wall that blocks and wounds wolves on contact.',
+        reqs: { wood: 4 },
+        snapMode: 'free',
+        blocksMovement: true,
+        spikes: true
+    },
+    {
+        id: 'campfire',
+        name: 'Stone Campfire',
+        icon: '🔥',
+        desc: 'Provides warmth, 3D light, wolf deterrence, and cooking.',
+        reqs: { wood: 4, stone: 3 },
+        snapMode: 'free',
+        isFire: true
+    },
+    {
+        id: 'brazier',
+        name: 'Standing Torch Brazier',
+        icon: '🏮',
+        desc: 'Elevated iron-stone beacon that illuminates your base perimeter.',
+        reqs: { wood: 3, stone: 2, fiber: 1 },
+        snapMode: 'free',
+        isFire: true,
+        brazier: true
+    },
+    {
+        id: 'shelter',
+        name: 'A-Frame Tarp Shelter',
+        icon: '⛺',
+        desc: 'Quick wilderness bivouac for weather cover and safe resting.',
+        reqs: { wood: 5, fiber: 4 },
+        snapMode: 'free',
+        providesShelter: true
+    },
+    {
+        id: 'chest',
+        name: 'Wooden Storage Chest',
+        icon: '📦',
+        desc: '16-slot lockbox to store extra logs, stone, and supplies ([E]).',
+        reqs: { wood: 5, fiber: 2 },
+        snapMode: 'free',
+        interactive: 'chest'
+    }
+];
+
+// ==========================================
+// 3. GAME STATE & TERRAIN CONSTANTS
+// ==========================================
+const WORLD_RADIUS = 135;
+const GRID_SIZE = 4.0;
+const WALL_HEIGHT = 2.8;
+
+const state = {
+    running: false,
+    gameOver: false,
+    day: 1,
+    season: 'spring',
+    timeOfDay: 8.0,
+    weather: 'clear',
+    weatherTimer: 95,
+    ambientTemp: 12,
+    craftTab: 'craft',
+
+    buildMode: {
+        active: false,
+        pieceIndex: 0,
+        rotation: 0,
+        ghostMesh: null,
+        ghostType: null,
+        valid: false,
+        snapLabel: 'Free Place',
+        targetPos: new THREE.Vector3(),
+        targetRot: 0
+    },
+
+    activeChest: null,
+    spawnPoint: null,
+    vehicles: [],
+    activeVehicle: null,
+    recoilTime: 0,
+    isScoped: false,
+    engineSoundTimer: 0,
+    fishing: {
+        active: false,
+        bobberPos: new THREE.Vector3(),
+        bobberMesh: null,
+        lineMesh: null,
+        biteTimer: 0,
+        hasBite: false,
+        biteWindow: 0
+    },
+
+    player: {
+        pos: new THREE.Vector3(0, 2, 0),
+        vel: new THREE.Vector3(0, 0, 0),
+        yaw: 0,
+        pitch: 0,
+        height: 1.72,
+        onGround: false,
+        health: 100,
+        stamina: 100,
+        bodyTemp: 37.0,
+        wetness: 0,
+        swingTime: 0,
+        bobTime: 0,
+        stepAccum: 0,
+        selectedSlot: 0,
+        inventory: new Array(8).fill(null)
+    },
+
+    keys: {},
+    interactables: [],
+    animals: [],
+    structures: [],
+    particles: [],
+    weatherParticles: null,
+    currentTarget: null,
+
+    stats: {
+        gathered: 0,
+        crafted: 0,
+        hunted: 0
+    }
+};
+
+// Terrain height function & river path
+function getRiverCenterX(z) {
+    return Math.sin(z * 0.032) * 26 + Math.cos(z * 0.015) * 14 - 18;
+}
+
+function getTerrainHeight(x, z) {
+    const riverX = getRiverCenterX(z);
+    const distRiver = Math.abs(x - riverX);
+
+    // Rolling hills
+    let h = Math.sin(x * 0.035) * Math.cos(z * 0.035) * 4.8
+          + Math.sin(x * 0.08 + z * 0.06) * 1.4;
+
+    // Carve river channel smoothly
+    const riverFactor = Math.min(1, Math.max(0, (distRiver - 4.5) / 11.0));
+    const smoothRiver = riverFactor * riverFactor * (3 - 2 * riverFactor);
+    h = -1.65 * (1 - smoothRiver) + (h + 1.2) * smoothRiver;
+
+    // Outer mountain rim
+    const distCenter = Math.hypot(x, z);
+    if (distCenter > WORLD_RADIUS - 25) {
+        const rim = (distCenter - (WORLD_RADIUS - 25)) / 25;
+        h += rim * rim * 18;
+    }
+    return h;
+}
+
+function isInWater(x, z) {
+    return getTerrainHeight(x, z) < -0.35;
+}
+
+// ==========================================
+// 4. THREE.JS SCENE, CAMERA & VIEWMODEL
+// ==========================================
+let scene, camera, renderer;
+let sunLight, hemiLight, moonLight, torchLight, muzzleLight;
+let skyDome, starsPoints, terrainMesh, waterMesh;
+let viewModelGroup, handMesh, axeMesh, spearMesh, torchMesh, torchFlameMesh, rifleMesh, muzzleFlashMesh, rodMesh, rodTipDummy;
+let worldGroup, structureGroup, particleGroup;
+const raycaster = new THREE.Raycaster();
+
+function initThree() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x8fa8be, 0.012);
+
+    camera = new THREE.PerspectiveCamera(72, window.innerWidth / window.innerHeight, 0.1, 320);
+    camera.rotation.order = 'YXZ';
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('game-container').prepend(renderer.domElement);
+
+    worldGroup = new THREE.Group();
+    structureGroup = new THREE.Group();
+    particleGroup = new THREE.Group();
+    scene.add(worldGroup);
+    scene.add(structureGroup);
+    scene.add(particleGroup);
+
+    // Lighting
+    hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x2d3a28, 0.65);
+    scene.add(hemiLight);
+
+    sunLight = new THREE.DirectionalLight(0xfff3d6, 1.15);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.near = 5;
+    sunLight.shadow.camera.far = 180;
+    const d = 65;
+    sunLight.shadow.camera.left = -d;
+    sunLight.shadow.camera.right = d;
+    sunLight.shadow.camera.top = d;
+    sunLight.shadow.camera.bottom = -d;
+    sunLight.shadow.bias = -0.0005;
+    scene.add(sunLight);
+    scene.add(sunLight.target);
+
+    moonLight = new THREE.DirectionalLight(0x60a5fa, 0.15);
+    moonLight.position.set(-40, 60, -40);
+    scene.add(moonLight);
+
+    // Sky Dome & Starfield
+    const skyGeo = new THREE.SphereGeometry(260, 24, 16);
+    const skyMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, side: THREE.BackSide, fog: false });
+    skyDome = new THREE.Mesh(skyGeo, skyMat);
+    scene.add(skyDome);
+
+    const starGeo = new THREE.BufferGeometry();
+    const starVerts = [];
+    for (let i = 0; i < 900; i++) {
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(Math.random());
+        const r = 245;
+        starVerts.push(r * Math.sin(phi) * Math.cos(theta), r * Math.cos(phi), r * Math.sin(phi) * Math.sin(theta));
+    }
+    starGeo.setAttribute('position', new THREE.Float32BufferAttribute(starVerts, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.1, transparent: true, opacity: 0, fog: false });
+    starsPoints = new THREE.Points(starGeo, starMat);
+    scene.add(starsPoints);
+
+    buildFirstPersonViewModel();
+    scene.add(camera);
+
+    window.addEventListener('resize', onWindowResize);
+}
+
+function buildFirstPersonViewModel() {
+    viewModelGroup = new THREE.Group();
+    viewModelGroup.position.set(0.32, -0.28, -0.48);
+
+    // Forearm / Glove
+    const armGeo = new THREE.BoxGeometry(0.11, 0.11, 0.42);
+    const armMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+    handMesh = new THREE.Mesh(armGeo, armMat);
+    handMesh.position.set(0.04, -0.06, 0.12);
+    handMesh.rotation.x = 0.25;
+    viewModelGroup.add(handMesh);
+
+    // Stone Hatchet
+    axeMesh = new THREE.Group();
+    const handle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.022, 0.52, 8),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.85 })
+    );
+    handle.rotation.x = -0.35;
+    handle.position.set(0, 0.12, -0.05);
+    const blade = new THREE.Mesh(
+        new THREE.BoxGeometry(0.03, 0.11, 0.17),
+        new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4, metalness: 0.3 })
+    );
+    blade.position.set(0, 0.31, -0.14);
+    blade.rotation.x = -0.35;
+    axeMesh.add(handle, blade);
+    axeMesh.visible = false;
+    viewModelGroup.add(axeMesh);
+
+    // Wooden Spear
+    spearMesh = new THREE.Group();
+    const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.014, 0.016, 1.35, 8),
+        new THREE.MeshStandardMaterial({ color: 0x854d0e, roughness: 0.8 })
+    );
+    shaft.rotation.x = Math.PI / 2 - 0.18;
+    shaft.position.set(0, 0.05, -0.32);
+    const tip = new THREE.Mesh(
+        new THREE.ConeGeometry(0.032, 0.16, 6),
+        new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.35, metalness: 0.4 })
+    );
+    tip.rotation.x = -Math.PI / 2 - 0.18;
+    tip.position.set(0, 0.18, -1.03);
+    spearMesh.add(shaft, tip);
+    spearMesh.visible = false;
+    viewModelGroup.add(spearMesh);
+
+    // Lit Torch
+    torchMesh = new THREE.Group();
+    const stick = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.024, 0.48, 8),
+        new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9 })
+    );
+    stick.rotation.x = -0.25;
+    stick.position.set(0, 0.1, -0.04);
+    torchFlameMesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.065, 0.18, 8),
+        new THREE.MeshBasicMaterial({ color: 0xff9800 })
+    );
+    torchFlameMesh.position.set(0, 0.36, -0.11);
+    torchLight = new THREE.PointLight(0xff7b00, 0, 16, 1.6);
+    torchLight.position.set(0, 0.42, -0.15);
+    torchMesh.add(stick, torchFlameMesh, torchLight);
+    torchMesh.visible = false;
+    viewModelGroup.add(torchMesh);
+
+    // Hunting Rifle
+    rifleMesh = new THREE.Group();
+    const stockMat = new THREE.MeshStandardMaterial({ color: 0x5c3419, roughness: 0.8 });
+    const barrelMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.35, metalness: 0.75 });
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.13, 0.55), stockMat);
+    stock.position.set(0, 0.02, 0.05);
+    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.02, 0.95, 8), barrelMat);
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, 0.075, -0.52);
+    const scopeTube = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.28, 8), barrelMat);
+    scopeTube.rotation.x = Math.PI / 2;
+    scopeTube.position.set(0, 0.125, -0.22);
+    muzzleFlashMesh = new THREE.Mesh(
+        new THREE.ConeGeometry(0.09, 0.24, 7),
+        new THREE.MeshBasicMaterial({ color: 0xfef08a, transparent: true, opacity: 0.95 })
+    );
+    muzzleFlashMesh.rotation.x = -Math.PI / 2;
+    muzzleFlashMesh.position.set(0, 0.075, -1.08);
+    muzzleFlashMesh.visible = false;
+    muzzleLight = new THREE.PointLight(0xffb703, 0, 14, 1.5);
+    muzzleLight.position.set(0, 0.1, -1.1);
+    rifleMesh.add(stock, barrel, scopeTube, muzzleFlashMesh, muzzleLight);
+    rifleMesh.visible = false;
+    viewModelGroup.add(rifleMesh);
+
+    // Wooden Fishing Rod
+    rodMesh = new THREE.Group();
+    const rodPole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.008, 0.022, 1.65, 8),
+        new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.8 })
+    );
+    rodPole.rotation.x = Math.PI / 2 - 0.35;
+    rodPole.position.set(0, 0.25, -0.58);
+    const reel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.038, 0.038, 0.04, 10),
+        new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.6, roughness: 0.35 })
+    );
+    reel.rotation.z = Math.PI / 2;
+    reel.position.set(0, 0.02, -0.14);
+    rodTipDummy = new THREE.Object3D();
+    rodTipDummy.position.set(0, 0.54, -1.35);
+    rodMesh.add(rodPole, reel, rodTipDummy);
+    rodMesh.visible = false;
+    viewModelGroup.add(rodMesh);
+
+    camera.add(viewModelGroup);
+}
+
+function onWindowResize() {
+    if (!camera || !renderer) return;
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
+
+// ==========================================
+// 5. PROCEDURAL 3D WORLD GENERATION
+// ==========================================
+function buildTerrainAndWater() {
+    const size = WORLD_RADIUS * 2;
+    const segments = 150;
+    const geo = new THREE.PlaneGeometry(size, size, segments, segments);
+    geo.rotateX(-Math.PI / 2);
+
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getZ(i);
+        pos.setY(i, getTerrainHeight(x, z));
+    }
+
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+
+    const terrainMat = new THREE.MeshStandardMaterial({
+        vertexColors: true,
+        roughness: 0.92,
+        metalness: 0.04
+    });
+    terrainMesh = new THREE.Mesh(geo, terrainMat);
+    terrainMesh.receiveShadow = true;
+    worldGroup.add(terrainMesh);
+
+    // Water Plane
+    const waterGeo = new THREE.PlaneGeometry(size, size);
+    waterGeo.rotateX(-Math.PI / 2);
+    const waterMat = new THREE.MeshStandardMaterial({
+        color: 0x1d6fa5,
+        roughness: 0.15,
+        metalness: 0.55,
+        transparent: true,
+        opacity: 0.82
+    });
+    waterMesh = new THREE.Mesh(waterGeo, waterMat);
+    waterMesh.position.y = -0.35;
+    waterMesh.receiveShadow = true;
+    worldGroup.add(waterMesh);
+
+    applySeasonVisuals('spring');
+
+    // Weather Particle System (Rain / Snowflakes)
+    const pCount = 1500;
+    const pGeo = new THREE.BufferGeometry();
+    const pVerts = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+        pVerts[i * 3] = (Math.random() - 0.5) * 95;
+        pVerts[i * 3 + 1] = Math.random() * 24;
+        pVerts[i * 3 + 2] = (Math.random() - 0.5) * 95;
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pVerts, 3));
+    const pMat = new THREE.PointsMaterial({ color: 0x93c5fd, size: 0.14, transparent: true, opacity: 0 });
+    state.weatherParticles = new THREE.Points(pGeo, pMat);
+    scene.add(state.weatherParticles);
+}
+
+function getSeasonForDay(day) {
+    const seasons = ['spring', 'summer', 'autumn', 'winter'];
+    const idx = Math.floor((Math.max(1, day) - 1) / 5) % 4;
+    return seasons[idx];
+}
+
+function applySeasonVisuals(season) {
+    state.season = season;
+    if (!terrainMesh) return;
+
+    const palettes = {
+        spring: {
+            sand: 0x9a8c72, grass: 0x4d7c3f, floor: 0x365932, snow: 0xdbeafe, bed: 0x334155,
+            snowLine: 8.5,
+            needles: [0x1b4d32, 0x246642, 0x2e7d52],
+            water: 0x1d6fa5
+        },
+        summer: {
+            sand: 0xb5a27e, grass: 0x3a6b35, floor: 0x264b25, snow: 0x94a3b8, bed: 0x2b4156,
+            snowLine: 11.5,
+            needles: [0x143824, 0x1b4d32, 0x225e3e],
+            water: 0x0284c7
+        },
+        autumn: {
+            sand: 0x9a8468, grass: 0x855828, floor: 0x6b3e1b, snow: 0xe2e8f0, bed: 0x3f3a36,
+            snowLine: 8.0,
+            needles: [0x9a3412, 0xb45309, 0xd97706],
+            water: 0x25638a
+        },
+        winter: {
+            sand: 0xcbd5e1, grass: 0xe2e8f0, floor: 0xcbd5e1, snow: 0xf8fafc, bed: 0x475569,
+            snowLine: 1.8,
+            needles: [0x2a473b, 0x476b5c, 0xcbd5e1],
+            water: 0x38769c
+        }
+    };
+
+    const pal = palettes[season] || palettes.spring;
+    const cSand = new THREE.Color(pal.sand);
+    const cGrass = new THREE.Color(pal.grass);
+    const cPineFloor = new THREE.Color(pal.floor);
+    const cSnow = new THREE.Color(pal.snow);
+    const cRiverBed = new THREE.Color(pal.bed);
+
+    const pos = terrainMesh.geometry.attributes.position;
+    const colAttr = terrainMesh.geometry.attributes.color;
+    const col = new THREE.Color();
+
+    for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const z = pos.getZ(i);
+
+        if (y < -0.45) {
+            col.copy(cRiverBed);
+        } else if (y < 0.35) {
+            col.copy(cSand);
+        } else if (y > pal.snowLine) {
+            col.copy(cGrass).lerp(cSnow, Math.min(1, (y - pal.snowLine) / 4.0));
+        } else {
+            const noise = (Math.sin(x * 0.25) * Math.cos(z * 0.25) + 1) * 0.5;
+            col.copy(cGrass).lerp(cPineFloor, noise * 0.65);
+        }
+        colAttr.setXYZ(i, col.r, col.g, col.b);
+    }
+    colAttr.needsUpdate = true;
+
+    TREE_SHARED.needleMats.forEach((mat, idx) => {
+        mat.color.setHex(pal.needles[idx]);
+    });
+
+    if (waterMesh) {
+        waterMesh.material.color.setHex(pal.water);
+    }
+}
+
+// Shared Pine Tree Geometries & Materials for smooth 60fps rendering with 340+ trees
+const TREE_SHARED = {
+    trunkGeo: new THREE.CylinderGeometry(0.24, 0.42, 4.5, 6),
+    stumpGeo: new THREE.CylinderGeometry(0.32, 0.44, 0.65, 6),
+    trunkMat: new THREE.MeshStandardMaterial({ color: 0x452715, roughness: 0.95 }),
+    coneGeos: [
+        new THREE.ConeGeometry(2.3, 3.4, 6),
+        new THREE.ConeGeometry(1.85, 3.1, 6),
+        new THREE.ConeGeometry(1.4, 2.8, 6)
+    ],
+    needleMats: [
+        new THREE.MeshStandardMaterial({ color: 0x143824, roughness: 0.85 }),
+        new THREE.MeshStandardMaterial({ color: 0x1b4d32, roughness: 0.85 }),
+        new THREE.MeshStandardMaterial({ color: 0x225e3e, roughness: 0.85 })
+    ]
+};
+
+function createPineTree(x, z) {
+    const y = getTerrainHeight(x, z);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    const scale = 0.85 + Math.random() * 0.55;
+    group.scale.setScalar(scale);
+
+    // Full Tree Group (hidden when felled)
+    const fullTree = new THREE.Group();
+    const trunk = new THREE.Mesh(TREE_SHARED.trunkGeo, TREE_SHARED.trunkMat);
+    trunk.position.y = 2.25;
+    trunk.castShadow = true;
+    trunk.receiveShadow = true;
+    fullTree.add(trunk);
+
+    for (let i = 0; i < 3; i++) {
+        const cone = new THREE.Mesh(TREE_SHARED.coneGeos[i], TREE_SHARED.needleMats[i]);
+        cone.position.y = 4.2 + i * 1.9;
+        cone.castShadow = true;
+        fullTree.add(cone);
+    }
+    group.add(fullTree);
+
+    // Tree Stump (shown while tree is regrowing)
+    const stump = new THREE.Mesh(TREE_SHARED.stumpGeo, TREE_SHARED.trunkMat);
+    stump.position.y = 0.32;
+    stump.castShadow = true;
+    stump.receiveShadow = true;
+    stump.visible = false;
+    group.add(stump);
+
+    worldGroup.add(group);
+    const obj = {
+        type: 'tree',
+        mesh: group,
+        fullTree,
+        stump,
+        x, y, z,
+        baseScale: scale,
+        radius: 0.9 * scale,
+        hp: 5,
+        shake: 0,
+        felled: false,
+        respawnTimer: 0
+    };
+    group.traverse(c => { c.userData.interactable = obj; });
+    state.interactables.push(obj);
+}
+
+function createBoulder(x, z) {
+    const y = getTerrainHeight(x, z);
+    const geo = new THREE.DodecahedronGeometry(1.15, 0);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.88, flatShading: true });
+    const mesh = new THREE.Mesh(geo, mat);
+    const scale = 0.75 + Math.random() * 0.65;
+    mesh.scale.set(scale * 1.2, scale * 0.85, scale);
+    mesh.position.set(x, y + 0.5 * scale, z);
+    mesh.rotation.set(Math.random(), Math.random(), Math.random());
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    worldGroup.add(mesh);
+
+    const obj = { type: 'rock', mesh, x, y, z, radius: 1.1 * scale, hp: 4, shake: 0 };
+    mesh.userData.interactable = obj;
+    state.interactables.push(obj);
+}
+
+function createBerryBush(x, z) {
+    const y = getTerrainHeight(x, z);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    const bushMat = new THREE.MeshStandardMaterial({ color: 0x2d6a4f, roughness: 0.9 });
+    const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.75, 1), bushMat);
+    bush.position.y = 0.5;
+    bush.castShadow = true;
+    group.add(bush);
+
+    const berries = [];
+    const berryGeo = new THREE.SphereGeometry(0.08, 6, 6);
+    const berryMat = new THREE.MeshStandardMaterial({ color: 0x3b82f6, emissive: 0x1d4ed8, emissiveIntensity: 0.3 });
+    for (let i = 0; i < 8; i++) {
+        const b = new THREE.Mesh(berryGeo, berryMat);
+        const a = (i / 8) * Math.PI * 2;
+        b.position.set(Math.cos(a) * 0.65, 0.55 + (i % 2) * 0.2, Math.sin(a) * 0.65);
+        group.add(b);
+        berries.push(b);
+    }
+
+    worldGroup.add(group);
+    const obj = { type: 'berry_bush', mesh: group, berries, x, y, z, hasBerries: true, regrowTimer: 0 };
+    group.traverse(c => { c.userData.interactable = obj; });
+    state.interactables.push(obj);
+}
+
+function createFiberPlant(x, z) {
+    const y = getTerrainHeight(x, z);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0x65a30d, roughness: 0.85, side: THREE.DoubleSide });
+    for (let i = 0; i < 5; i++) {
+        const blade = new THREE.Mesh(new THREE.PlaneGeometry(0.14, 0.85), bladeMat);
+        blade.position.y = 0.4;
+        blade.rotation.y = (i / 5) * Math.PI;
+        blade.rotation.z = (Math.random() - 0.5) * 0.35;
+        group.add(blade);
+    }
+    worldGroup.add(group);
+    const obj = { type: 'fiber_plant', mesh: group, x, y, z };
+    group.traverse(c => { c.userData.interactable = obj; });
+    state.interactables.push(obj);
+}
+
+function createMushroom(x, z) {
+    const y = getTerrainHeight(x, z);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+    const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.07, 0.24, 6),
+        new THREE.MeshStandardMaterial({ color: 0xfef3c7 })
+    );
+    stem.position.y = 0.12;
+    const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.MeshStandardMaterial({ color: 0xd97706 })
+    );
+    cap.position.y = 0.22;
+    group.add(stem, cap);
+    worldGroup.add(group);
+    const obj = { type: 'mushroom', mesh: group, x, y, z };
+    group.traverse(c => { c.userData.interactable = obj; });
+    state.interactables.push(obj);
+}
+
+function createAnimal(type, x, z) {
+    const y = getTerrainHeight(x, z);
+    const group = new THREE.Group();
+    group.position.set(x, y, z);
+
+    const isWolf = type === 'wolf';
+    const isDeer = type === 'deer';
+    const bodyColor = isWolf ? 0x334155 : (isDeer ? 0x92400e : 0xd6d3d1);
+    const mat = new THREE.MeshStandardMaterial({ color: bodyColor, roughness: 0.85 });
+
+    const bodyW = isDeer ? 0.65 : (isWolf ? 0.55 : 0.28);
+    const bodyH = isDeer ? 0.68 : (isWolf ? 0.55 : 0.26);
+    const bodyL = isDeer ? 1.35 : (isWolf ? 1.15 : 0.45);
+    const legH = isDeer ? 0.72 : (isWolf ? 0.52 : 0.16);
+
+    const body = new THREE.Mesh(new THREE.BoxGeometry(bodyW, bodyH, bodyL), mat);
+    body.position.y = legH + bodyH * 0.45;
+    body.castShadow = true;
+    group.add(body);
+
+    const head = new THREE.Mesh(new THREE.BoxGeometry(bodyW * 0.75, bodyH * 0.7, bodyL * 0.42), mat);
+    head.position.set(0, legH + bodyH * 0.85, bodyL * 0.55);
+    head.castShadow = true;
+    group.add(head);
+
+    if (isWolf) {
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+        const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.05, 0.05), eyeMat);
+        eyeL.position.set(0.12, legH + bodyH * 0.92, bodyL * 0.76);
+        const eyeR = eyeL.clone();
+        eyeR.position.x = -0.12;
+        group.add(eyeL, eyeR);
+    }
+
+    const legGeo = new THREE.BoxGeometry(0.11, legH, 0.11);
+    [[-1, 1], [1, 1], [-1, -1], [1, -1]].forEach(([sx, sz]) => {
+        const leg = new THREE.Mesh(legGeo, mat);
+        leg.position.set(sx * (bodyW * 0.34), legH * 0.5, sz * (bodyL * 0.36));
+        leg.castShadow = true;
+        group.add(leg);
+    });
+
+    worldGroup.add(group);
+    const animal = {
+        type,
+        mesh: group,
+        x, y, z,
+        vx: 0, vz: 0,
+        hp: isWolf ? 45 : (isDeer ? 35 : 12),
+        speed: isWolf ? 6.4 : (isDeer ? 7.2 : 5.4),
+        wanderTimer: Math.random() * 3,
+        attackCooldown: 0
+    };
+    group.traverse(c => { c.userData.animal = animal; });
+    state.animals.push(animal);
+}
+
+function generateWorld() {
+    while (worldGroup.children.length) worldGroup.remove(worldGroup.children[0]);
+    while (structureGroup.children.length) structureGroup.remove(structureGroup.children[0]);
+    while (particleGroup.children.length) particleGroup.remove(particleGroup.children[0]);
+
+    state.interactables = [];
+    state.animals = [];
+    state.structures = [];
+    state.particles = [];
+    state.vehicles = [];
+    state.activeVehicle = null;
+    document.getElementById('vehicle-hud').classList.remove('active');
+
+    buildTerrainAndWater();
+
+    // Populate Dense Pine Forest (340 trees across valley & hillsides)
+    for (let i = 0; i < 340; i++) {
+        const x = (Math.random() - 0.5) * (WORLD_RADIUS * 1.82);
+        const z = (Math.random() - 0.5) * (WORLD_RADIUS * 1.82);
+        if (Math.hypot(x, z) > 10 && !isInWater(x, z)) {
+            createPineTree(x, z);
+        }
+    }
+
+    // Populate Flint Boulders
+    for (let i = 0; i < 55; i++) {
+        const x = (Math.random() - 0.5) * (WORLD_RADIUS * 1.75);
+        const z = (Math.random() - 0.5) * (WORLD_RADIUS * 1.75);
+        if (Math.hypot(x, z) > 10 && !isInWater(x, z)) {
+            createBoulder(x, z);
+        }
+    }
+
+    // Populate Berry Bushes, Fiber & Mushrooms
+    for (let i = 0; i < 55; i++) {
+        const x = (Math.random() - 0.5) * (WORLD_RADIUS * 1.65);
+        const z = (Math.random() - 0.5) * (WORLD_RADIUS * 1.65);
+        if (!isInWater(x, z)) createBerryBush(x, z);
+    }
+    for (let i = 0; i < 75; i++) {
+        const x = (Math.random() - 0.5) * (WORLD_RADIUS * 1.65);
+        const z = (Math.random() - 0.5) * (WORLD_RADIUS * 1.65);
+        if (!isInWater(x, z)) createFiberPlant(x, z);
+    }
+    for (let i = 0; i < 40; i++) {
+        const x = (Math.random() - 0.5) * (WORLD_RADIUS * 1.65);
+        const z = (Math.random() - 0.5) * (WORLD_RADIUS * 1.65);
+        if (!isInWater(x, z)) createMushroom(x, z);
+    }
+
+    // Spawn Wildlife
+    for (let i = 0; i < 12; i++) {
+        const x = (Math.random() - 0.5) * 140;
+        const z = (Math.random() - 0.5) * 140;
+        if (!isInWater(x, z)) createAnimal('rabbit', x, z);
+    }
+    for (let i = 0; i < 9; i++) {
+        const x = (Math.random() - 0.5) * 160;
+        const z = (Math.random() - 0.5) * 160;
+        if (!isInWater(x, z)) createAnimal('deer', x, z);
+    }
+    for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        const dist = 52 + Math.random() * 40;
+        const x = Math.cos(angle) * dist;
+        const z = Math.sin(angle) * dist;
+        if (!isInWater(x, z)) createAnimal('wolf', x, z);
+    }
+}
+
+// ==========================================
+// 6. INVENTORY & CRAFTING LOGIC
+// ==========================================
+function getItemCount(id) {
+    let total = 0;
+    for (let slot of state.player.inventory) {
+        if (slot && slot.id === id) total += slot.count;
+    }
+    return total;
+}
+
+function addItem(id, count = 1) {
+    const def = ITEMS[id];
+    if (!def) return false;
+
+    if (def.stackable) {
+        for (let slot of state.player.inventory) {
+            if (slot && slot.id === id) {
+                slot.count += count;
+                renderInventory();
+                updateCraftingUI();
+                return true;
+            }
+        }
+    }
+
+    for (let i = 0; i < 8; i++) {
+        if (!state.player.inventory[i]) {
+            state.player.inventory[i] = {
+                id,
+                count: def.stackable ? count : 1,
+                durability: def.maxDurability || null
+            };
+            renderInventory();
+            updateCraftingUI();
+            return true;
+        }
+    }
+    addLog("Inventory full! Drop or consume items.", "warn");
+    return false;
+}
+
+function removeItems(reqs) {
+    for (const [id, needed] of Object.entries(reqs)) {
+        let rem = needed;
+        for (let i = 0; i < 8; i++) {
+            const slot = state.player.inventory[i];
+            if (slot && slot.id === id) {
+                const take = Math.min(slot.count, rem);
+                slot.count -= take;
+                rem -= take;
+                if (slot.count <= 0) state.player.inventory[i] = null;
+                if (rem <= 0) break;
+            }
+        }
+    }
+    renderInventory();
+    updateCraftingUI();
+}
+
+function isNearActiveFire(maxDist = 5.5) {
+    const p = state.player.pos;
+    for (let s of state.structures) {
+        if (s.isFire && s.fuel > 0 && Math.hypot(s.x - p.x, s.z - p.z) <= maxDist) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function getActiveBed() {
+    for (let i = state.structures.length - 1; i >= 0; i--) {
+        if (state.structures[i].type === 'bed') return state.structures[i];
+    }
+    return null;
+}
+
+function isPlayerSheltered() {
+    const p = state.player.pos;
+    for (let s of state.structures) {
+        if ((s.type === 'shelter' || s.type === 'roof' || s.type === 'bed') && Math.hypot(s.x - p.x, s.z - p.z) <= 3.6) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function getFloorHeightAt(x, z, currentY = 999) {
+    let bestH = getTerrainHeight(x, z);
+    for (let s of state.structures) {
+        if (s.type === 'foundation') {
+            const dx = Math.abs(x - s.x);
+            const dz = Math.abs(z - s.z);
+            if (dx <= GRID_SIZE * 0.52 && dz <= GRID_SIZE * 0.52) {
+                const topY = s.y + 0.55;
+                if (topY <= currentY + 0.85 && topY > bestH) {
+                    bestH = topY;
+                }
+            }
+        } else if (s.type === 'stairs') {
+            const dx = x - s.x;
+            const dz = z - s.z;
+            const cos = Math.cos(-s.rot);
+            const sin = Math.sin(-s.rot);
+            const lx = dx * cos - dz * sin;
+            const lz = dx * sin + dz * cos;
+            if (Math.abs(lx) <= 1.9 && Math.abs(lz) <= 2.1) {
+                const t = Math.max(0, Math.min(1, (lz + 2.0) / 4.0));
+                const rampY = s.y + t * 0.55;
+                if (rampY <= currentY + 0.85 && rampY > bestH) {
+                    bestH = rampY;
+                }
+            }
+        }
+    }
+    return bestH;
+}
+
+function checkStructureCollision(nx, nz, playerY) {
+    const pRadius = 0.42;
+    for (let s of state.structures) {
+        if (!s.blocksMovement) continue;
+        if (s.type === 'doorway' && s.doorOpen) continue;
+
+        const dx = nx - s.x;
+        const dz = nz - s.z;
+        const cos = Math.cos(-s.rot);
+        const sin = Math.sin(-s.rot);
+        const lx = dx * cos - dz * sin;
+        const lz = dx * sin + dz * cos;
+
+        if (playerY >= s.y + WALL_HEIGHT - 0.2 || playerY + 1.6 < s.y) continue;
+
+        if (Math.abs(lx) < (GRID_SIZE * 0.48 + pRadius) && Math.abs(lz) < (0.35 + pRadius)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function hasIngredients(reqs) {
+    for (const [id, needed] of Object.entries(reqs)) {
+        if (getItemCount(id) < needed) return false;
+    }
+    return true;
+}
+
+function canCraft(recipe) {
+    if (recipe.nearFire && !isNearActiveFire(5.5)) return false;
+    return hasIngredients(recipe.reqs);
+}
+
+function craftItem(recipe) {
+    if (!canCraft(recipe)) return;
+    removeItems(recipe.reqs);
+    sound.playCraft();
+    state.stats.crafted++;
+
+    if (recipe.type === 'item') {
+        const qty = recipe.count || 1;
+        addItem(recipe.result, qty);
+        addLog(`Crafted ${recipe.name}${qty > 1 ? ` (x${qty})` : ''}.`, "good");
+    }
+    updateCraftingUI();
+}
+
+// ==========================================
+// 7. 3D BASE BUILDING SYSTEM (GHOST, SNAPPING, DOORS, CHESTS)
+// ==========================================
+function createStructureMesh(type, isGhost = false) {
+    const group = new THREE.Group();
+    const logMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 });
+    const darkLogMat = new THREE.MeshStandardMaterial({ color: 0x4a2e16, roughness: 0.92 });
+    const plankMat = new THREE.MeshStandardMaterial({ color: 0x855832, roughness: 0.85 });
+    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x64748b, roughness: 0.9, flatShading: true });
+    const tarpMat = new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.9, side: THREE.DoubleSide });
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5, metalness: 0.6 });
+
+    let fireMesh = null;
+    let pointLight = null;
+    let doorPivot = null;
+
+    if (type === 'foundation') {
+        for (let i = 0; i < 8; i++) {
+            const plank = new THREE.Mesh(new THREE.BoxGeometry(GRID_SIZE, 0.14, GRID_SIZE / 8 - 0.03), i % 2 === 0 ? plankMat : logMat);
+            plank.position.set(0, 0.48, -GRID_SIZE / 2 + (i + 0.5) * (GRID_SIZE / 8));
+            plank.castShadow = !isGhost;
+            plank.receiveShadow = !isGhost;
+            group.add(plank);
+        }
+        [[-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8], [1.8, 1.8]].forEach(([px, pz]) => {
+            const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 1.5, 8), darkLogMat);
+            post.position.set(px, -0.25, pz);
+            group.add(post);
+        });
+    } else if (type === 'wall') {
+        const numLogs = 7;
+        const r = WALL_HEIGHT / (numLogs * 2);
+        for (let i = 0; i < numLogs; i++) {
+            const log = new THREE.Mesh(new THREE.CylinderGeometry(r, r, GRID_SIZE, 8), i % 2 === 0 ? logMat : darkLogMat);
+            log.rotation.z = Math.PI / 2;
+            log.position.y = r + i * (r * 2);
+            log.castShadow = !isGhost;
+            log.receiveShadow = !isGhost;
+            group.add(log);
+        }
+        [-1.92, 1.92].forEach(px => {
+            const post = new THREE.Mesh(new THREE.BoxGeometry(0.24, WALL_HEIGHT, 0.28), darkLogMat);
+            post.position.set(px, WALL_HEIGHT / 2, 0);
+            group.add(post);
+        });
+    } else if (type === 'doorway') {
+        [-1.35, 1.35].forEach(sx => {
+            for (let i = 0; i < 7; i++) {
+                const seg = new THREE.Mesh(new THREE.BoxGeometry(1.3, WALL_HEIGHT / 7 - 0.02, 0.26), i % 2 === 0 ? logMat : darkLogMat);
+                seg.position.set(sx, (i + 0.5) * (WALL_HEIGHT / 7), 0);
+                seg.castShadow = !isGhost;
+                group.add(seg);
+            }
+        });
+        const header = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.65, 0.28), darkLogMat);
+        header.position.set(0, WALL_HEIGHT - 0.325, 0);
+        group.add(header);
+
+        doorPivot = new THREE.Group();
+        doorPivot.position.set(-0.68, 0, 0);
+        const doorLeaf = new THREE.Mesh(new THREE.BoxGeometry(1.34, WALL_HEIGHT - 0.68, 0.12), plankMat);
+        doorLeaf.position.set(0.67, (WALL_HEIGHT - 0.68) / 2, 0);
+        doorLeaf.castShadow = !isGhost;
+        const handle = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 6), ironMat);
+        handle.position.set(1.18, 1.05, 0.09);
+        doorPivot.add(doorLeaf, handle);
+        group.add(doorPivot);
+    } else if (type === 'roof') {
+        const roofGeo = new THREE.BoxGeometry(GRID_SIZE + 0.35, 0.18, GRID_SIZE + 0.45);
+        const roof = new THREE.Mesh(roofGeo, plankMat);
+        roof.position.set(0, 0.45, 0);
+        roof.rotation.x = 0.24;
+        roof.castShadow = !isGhost;
+        roof.receiveShadow = !isGhost;
+        group.add(roof);
+
+        [-1.85, 1.85].forEach(bx => {
+            const beam = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.24, GRID_SIZE + 0.2), darkLogMat);
+            beam.position.set(bx, 0.35, 0);
+            beam.rotation.x = 0.24;
+            group.add(beam);
+        });
+    } else if (type === 'stairs') {
+        const steps = 6;
+        for (let i = 0; i < steps; i++) {
+            const step = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.14, GRID_SIZE / steps + 0.08), i % 2 === 0 ? plankMat : logMat);
+            const t = (i + 0.5) / steps;
+            step.position.set(0, t * 0.52, -GRID_SIZE / 2 + t * GRID_SIZE);
+            step.castShadow = !isGhost;
+            step.receiveShadow = !isGhost;
+            group.add(step);
+        }
+        [-1.72, 1.72].forEach(sx => {
+            const stringer = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.22, GRID_SIZE + 0.2), darkLogMat);
+            stringer.position.set(sx, 0.26, 0);
+            stringer.rotation.x = -Math.atan2(0.55, GRID_SIZE);
+            group.add(stringer);
+        });
+    } else if (type === 'palisade') {
+        const count = 9;
+        for (let i = 0; i < count; i++) {
+            const px = -1.8 + (i / (count - 1)) * 3.6;
+            const h = 2.35 + (i % 2) * 0.2;
+            const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, h, 7), i % 2 === 0 ? logMat : darkLogMat);
+            stake.position.set(px, h / 2, 0);
+            stake.castShadow = !isGhost;
+            const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.38, 7), plankMat);
+            tip.position.set(px, h + 0.19, 0);
+            group.add(stake, tip);
+        }
+        const cross = new THREE.Mesh(new THREE.BoxGeometry(GRID_SIZE, 0.18, 0.2), darkLogMat);
+        cross.position.set(0, 1.1, 0.12);
+        group.add(cross);
+    } else if (type === 'campfire') {
+        for (let i = 0; i < 10; i++) {
+            const a = (i / 10) * Math.PI * 2;
+            const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), stoneMat);
+            rock.position.set(Math.cos(a) * 0.78, 0.14, Math.sin(a) * 0.78);
+            group.add(rock);
+        }
+        for (let i = 0; i < 4; i++) {
+            const log = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 1.0, 6), darkLogMat);
+            log.position.y = 0.22;
+            log.rotation.z = Math.PI / 3;
+            log.rotation.y = (i / 4) * Math.PI;
+            group.add(log);
+        }
+        fireMesh = new THREE.Mesh(
+            new THREE.ConeGeometry(0.45, 0.95, 7),
+            new THREE.MeshBasicMaterial({ color: 0xff6b00 })
+        );
+        fireMesh.position.y = 0.55;
+        group.add(fireMesh);
+
+        if (!isGhost) {
+            pointLight = new THREE.PointLight(0xff7700, 2.6, 20, 1.5);
+            pointLight.position.y = 1.1;
+            group.add(pointLight);
+        }
+    } else if (type === 'brazier') {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.19, 2.2, 8), darkLogMat);
+        post.position.y = 1.1;
+        post.castShadow = !isGhost;
+        const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.22, 0.32, 8), ironMat);
+        bowl.position.y = 2.25;
+        fireMesh = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.72, 7), new THREE.MeshBasicMaterial({ color: 0xff9500 }));
+        fireMesh.position.y = 2.65;
+        group.add(post, bowl, fireMesh);
+
+        if (!isGhost) {
+            pointLight = new THREE.PointLight(0xff8c1a, 3.0, 26, 1.4);
+            pointLight.position.y = 2.9;
+            group.add(pointLight);
+        }
+    } else if (type === 'shelter') {
+        const ridge = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 3.2, 6), darkLogMat);
+        ridge.rotation.x = Math.PI / 2;
+        ridge.position.y = 1.85;
+        const leftPanel = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.4), tarpMat);
+        leftPanel.position.set(-0.85, 0.95, 0);
+        leftPanel.rotation.y = Math.PI / 2;
+        leftPanel.rotation.x = 0.72;
+        const rightPanel = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2.4), tarpMat);
+        rightPanel.position.set(0.85, 0.95, 0);
+        rightPanel.rotation.y = -Math.PI / 2;
+        rightPanel.rotation.x = 0.72;
+        group.add(ridge, leftPanel, rightPanel);
+    } else if (type === 'chest') {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.65, 0.85), plankMat);
+        base.position.y = 0.325;
+        base.castShadow = !isGhost;
+        const lid = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.22, 0.9), darkLogMat);
+        lid.position.y = 0.74;
+        lid.castShadow = !isGhost;
+        const latch = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.2, 0.08), ironMat);
+        latch.position.set(0, 0.64, 0.45);
+        group.add(base, lid, latch);
+    } else if (type === 'bed') {
+        const blanketMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.9 });
+        const pillowMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.85 });
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.32, 2.3), darkLogMat);
+        frame.position.y = 0.28;
+        frame.castShadow = !isGhost;
+        const headboard = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.95, 0.14), logMat);
+        headboard.position.set(0, 0.55, -1.12);
+        headboard.castShadow = !isGhost;
+        const footboard = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.55, 0.14), logMat);
+        footboard.position.set(0, 0.35, 1.12);
+        const mattress = new THREE.Mesh(new THREE.BoxGeometry(1.18, 0.18, 2.12), blanketMat);
+        mattress.position.set(0, 0.5, 0.04);
+        const pillow = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.14, 0.42), pillowMat);
+        pillow.position.set(0, 0.62, -0.76);
+        group.add(frame, headboard, footboard, mattress, pillow);
+    } else if (type === 'wood_stove') {
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.85, 0.75), ironMat);
+        body.position.y = 0.62;
+        body.castShadow = !isGhost;
+        [[-0.38, -0.28], [0.38, -0.28], [-0.38, 0.28], [0.38, 0.28]].forEach(([lx, lz]) => {
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.24, 6), ironMat);
+            leg.position.set(lx, 0.12, lz);
+            group.add(leg);
+        });
+        const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.85, 8), ironMat);
+        pipe.position.set(0, 1.9, -0.15);
+        pipe.castShadow = !isGhost;
+        const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.04, 10), stoneMat);
+        burner.position.set(0, 1.06, 0.08);
+        fireMesh = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.32, 0.06), new THREE.MeshBasicMaterial({ color: 0xff7b00 }));
+        fireMesh.position.set(0, 0.58, 0.38);
+        group.add(body, pipe, burner, fireMesh);
+        if (!isGhost) {
+            pointLight = new THREE.PointLight(0xff7700, 2.5, 18, 1.5);
+            pointLight.position.set(0, 0.9, 0.6);
+            group.add(pointLight);
+        }
+    } else if (type === 'hearth') {
+        const base = new THREE.Mesh(new THREE.BoxGeometry(1.75, 1.45, 0.95), stoneMat);
+        base.position.y = 0.725;
+        base.castShadow = !isGhost;
+        const chimney = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.8, 0.75), stoneMat);
+        chimney.position.set(0, 2.3, -0.05);
+        chimney.castShadow = !isGhost;
+        const mantel = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.14, 1.08), darkLogMat);
+        mantel.position.set(0, 1.48, 0.02);
+        const firebox = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.75, 0.25), new THREE.MeshStandardMaterial({ color: 0x111827 }));
+        firebox.position.set(0, 0.45, 0.38);
+        fireMesh = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.65, 7), new THREE.MeshBasicMaterial({ color: 0xff6b00 }));
+        fireMesh.position.set(0, 0.42, 0.45);
+        group.add(base, chimney, mantel, firebox, fireMesh);
+        if (!isGhost) {
+            pointLight = new THREE.PointLight(0xff7b00, 3.1, 22, 1.4);
+            pointLight.position.set(0, 0.9, 0.85);
+            group.add(pointLight);
+        }
+    } else if (type === 'workbench') {
+        const top = new THREE.Mesh(new THREE.BoxGeometry(1.95, 0.14, 0.95), plankMat);
+        top.position.y = 0.92;
+        top.castShadow = !isGhost;
+        [[-0.85, -0.38], [0.85, -0.38], [-0.85, 0.38], [0.85, 0.38]].forEach(([lx, lz]) => {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.88, 0.14), darkLogMat);
+            leg.position.set(lx, 0.44, lz);
+            group.add(leg);
+        });
+        const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.75), logMat);
+        shelf.position.y = 0.32;
+        const vise = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.22, 0.24), ironMat);
+        vise.position.set(-0.78, 0.92, 0.52);
+        group.add(top, shelf, vise);
+    } else if (type === 'water_well') {
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.92, 0.75, 10), stoneMat);
+        ring.position.y = 0.375;
+        ring.castShadow = !isGhost;
+        const waterDisc = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.7, 0.7, 0.05, 10),
+            new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.15, metalness: 0.5 })
+        );
+        waterDisc.position.y = 0.58;
+        [-0.78, 0.78].forEach(px => {
+            const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.45, 0.12), darkLogMat);
+            post.position.set(px, 1.35, 0);
+            group.add(post);
+        });
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(1.15, 0.65, 4), plankMat);
+        roof.position.y = 2.25;
+        roof.rotation.y = Math.PI / 4;
+        group.add(ring, waterDisc, roof);
+    } else if (type === 'atv') {
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.45, metalness: 0.25 });
+        const tireMat = new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.9 });
+        const rimMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, roughness: 0.4, metalness: 0.6 });
+
+        const chassis = new THREE.Mesh(new THREE.BoxGeometry(1.05, 0.34, 1.95), bodyMat);
+        chassis.position.y = 0.56;
+        chassis.castShadow = !isGhost;
+
+        const frontHood = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.22, 0.68), bodyMat);
+        frontHood.position.set(0, 0.72, 0.58);
+        frontHood.rotation.x = 0.15;
+
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.22, 0.85), tireMat);
+        seat.position.set(0, 0.8, -0.25);
+
+        const frontRack = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.06, 0.46), ironMat);
+        frontRack.position.set(0, 0.86, 0.68);
+        const rearRack = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.06, 0.46), ironMat);
+        rearRack.position.set(0, 0.86, -0.78);
+
+        const steerCol = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.48, 6), ironMat);
+        steerCol.position.set(0, 0.96, 0.32);
+        steerCol.rotation.x = -0.35;
+        const handlebar = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.82, 6), ironMat);
+        handlebar.rotation.z = Math.PI / 2;
+        handlebar.position.set(0, 1.15, 0.24);
+
+        const headlightMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+        [-0.28, 0.28].forEach(hx => {
+            const hl = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 8), headlightMat);
+            hl.rotation.x = Math.PI / 2;
+            hl.position.set(hx, 0.72, 0.96);
+            group.add(hl);
+        });
+
+        const wheelPositions = [
+            [-0.64, 0.34, 0.68],
+            [0.64, 0.34, 0.68],
+            [-0.64, 0.34, -0.68],
+            [0.64, 0.34, -0.68]
+        ];
+        wheelPositions.forEach(([wx, wy, wz]) => {
+            const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.26, 12), tireMat);
+            wheel.rotation.z = Math.PI / 2;
+            wheel.position.set(wx, wy, wz);
+            wheel.castShadow = !isGhost;
+            const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.28, 8), rimMat);
+            hub.rotation.z = Math.PI / 2;
+            hub.position.set(wx, wy, wz);
+            group.add(wheel, hub);
+        });
+
+        group.add(chassis, frontHood, seat, frontRack, rearRack, steerCol, handlebar);
+        if (!isGhost) {
+            pointLight = new THREE.SpotLight(0xfef9c3, 2.2, 34, Math.PI / 5, 0.45, 1.2);
+            pointLight.position.set(0, 0.85, 0.95);
+            pointLight.target.position.set(0, 0.3, 12);
+            group.add(pointLight);
+            group.add(pointLight.target);
+        }
+    }
+
+    if (isGhost) {
+        const ghostMat = new THREE.MeshBasicMaterial({
+            color: 0x10b981,
+            transparent: true,
+            opacity: 0.48,
+            depthWrite: false
+        });
+        group.traverse(child => {
+            if (child.isMesh) {
+                child.material = ghostMat;
+                child.castShadow = false;
+                child.receiveShadow = false;
+            }
+        });
+    }
+
+    return { group, fireMesh, pointLight, doorPivot };
+}
+
+function toggleBuildMode(forceState = null) {
+    const bm = state.buildMode;
+    bm.active = forceState !== null ? forceState : !bm.active;
+
+    const hud = document.getElementById('build-hud');
+    if (bm.active) {
+        document.getElementById('crafting-panel').classList.remove('open');
+        closeStorageModal();
+        hud.classList.add('active');
+        updateBuildGhostModel();
+        updateBuildHUD();
+    } else {
+        hud.classList.remove('active');
+        if (bm.ghostMesh) {
+            scene.remove(bm.ghostMesh);
+            bm.ghostMesh = null;
+            bm.ghostType = null;
+        }
+    }
+}
+
+function selectBuildPiece(index) {
+    state.buildMode.pieceIndex = (index + BUILD_PIECES.length) % BUILD_PIECES.length;
+    if (!state.buildMode.active) {
+        toggleBuildMode(true);
+    } else {
+        updateBuildGhostModel();
+        updateBuildHUD();
+    }
+}
+
+function updateBuildGhostModel() {
+    const bm = state.buildMode;
+    const bp = BUILD_PIECES[bm.pieceIndex];
+    if (bm.ghostMesh) {
+        scene.remove(bm.ghostMesh);
+    }
+    const built = createStructureMesh(bp.id, true);
+    bm.ghostMesh = built.group;
+    bm.ghostType = bp.id;
+    scene.add(bm.ghostMesh);
+}
+
+function updateBuildHUD() {
+    const bp = BUILD_PIECES[state.buildMode.pieceIndex];
+    document.getElementById('build-piece-name').textContent = `${bp.icon} ${bp.name}`;
+    document.getElementById('build-piece-desc').textContent = bp.desc;
+    document.getElementById('build-snap-badge').textContent = state.buildMode.snapLabel;
+
+    const costEl = document.getElementById('build-piece-cost');
+    costEl.innerHTML = Object.entries(bp.reqs).map(([id, qty]) => {
+        const have = getItemCount(id);
+        const ok = have >= qty;
+        return `<span class="${ok ? 'req-ok' : 'req-no'}">${ITEMS[id].icon} ${ITEMS[id].name}: ${have}/${qty}</span>`;
+    }).join('');
+}
+
+function computeBuildPlacement() {
+    const bm = state.buildMode;
+    if (!bm.active || !bm.ghostMesh) return;
+
+    const bp = BUILD_PIECES[bm.pieceIndex];
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+    dir.y = 0;
+    if (dir.lengthSq() < 0.001) dir.set(0, 0, -1);
+    dir.normalize();
+
+    const rawPos = state.player.pos.clone().addScaledVector(dir, 4.6);
+    let finalPos = new THREE.Vector3(rawPos.x, getTerrainHeight(rawPos.x, rawPos.z), rawPos.z);
+    let finalRot = bm.rotation;
+    let snapped = false;
+    let snapText = 'Free Terrain';
+
+    const foundations = state.structures.filter(s => s.type === 'foundation');
+
+    if (bp.snapMode === 'foundation' && foundations.length > 0) {
+        let bestDist = 3.2;
+        for (let f of foundations) {
+            const offsets = [
+                [GRID_SIZE, 0], [-GRID_SIZE, 0], [0, GRID_SIZE], [0, -GRID_SIZE]
+            ];
+            for (let [ox, oz] of offsets) {
+                const cos = Math.cos(f.rot);
+                const sin = Math.sin(f.rot);
+                const cx = f.x + ox * cos - oz * sin;
+                const cz = f.z + ox * sin + oz * cos;
+                const d = Math.hypot(rawPos.x - cx, rawPos.z - cz);
+                const occupied = foundations.some(other => Math.hypot(other.x - cx, other.z - cz) < 1.0);
+                if (!occupied && d < bestDist) {
+                    bestDist = d;
+                    finalPos.set(cx, f.y, cz);
+                    finalRot = f.rot;
+                    snapped = true;
+                    snapText = 'Snapped to Foundation';
+                }
+            }
+        }
+    } else if (bp.snapMode === 'edge' && foundations.length > 0) {
+        let bestDist = 2.8;
+        for (let f of foundations) {
+            const edges = [
+                { ox: 0, oz: GRID_SIZE / 2, r: 0 },
+                { ox: 0, oz: -GRID_SIZE / 2, r: Math.PI },
+                { ox: GRID_SIZE / 2, oz: 0, r: Math.PI / 2 },
+                { ox: -GRID_SIZE / 2, oz: 0, r: -Math.PI / 2 }
+            ];
+            for (let e of edges) {
+                const cos = Math.cos(f.rot);
+                const sin = Math.sin(f.rot);
+                const cx = f.x + e.ox * cos - e.oz * sin;
+                const cz = f.z + e.ox * sin + e.oz * cos;
+                const d = Math.hypot(rawPos.x - cx, rawPos.z - cz);
+                if (d < bestDist) {
+                    bestDist = d;
+                    if (bp.isRamp) {
+                        const outX = Math.sin(f.rot + e.r) * (GRID_SIZE / 2);
+                        const outZ = Math.cos(f.rot + e.r) * (GRID_SIZE / 2);
+                        finalPos.set(cx + outX, f.y, cz + outZ);
+                        finalRot = f.rot + e.r + Math.PI;
+                    } else {
+                        finalPos.set(cx, f.y + 0.55, cz);
+                        finalRot = f.rot + e.r + bm.rotation;
+                    }
+                    snapped = true;
+                    snapText = 'Snapped to Edge';
+                }
+            }
+        }
+    } else if (bp.snapMode === 'roof' && foundations.length > 0) {
+        let bestDist = 3.2;
+        for (let f of foundations) {
+            const d = Math.hypot(rawPos.x - f.x, rawPos.z - f.z);
+            if (d < bestDist) {
+                bestDist = d;
+                finalPos.set(f.x, f.y + 0.55 + WALL_HEIGHT, f.z);
+                finalRot = f.rot + bm.rotation;
+                snapped = true;
+                snapText = 'Snapped Overhead';
+            }
+        }
+    }
+
+    if (!snapped) {
+        const floorY = getFloorHeightAt(finalPos.x, finalPos.z, finalPos.y + 3);
+        if (floorY > finalPos.y) {
+            finalPos.y = floorY;
+            snapText = 'On Floor';
+        }
+    }
+
+    const inWater = isInWater(finalPos.x, finalPos.z);
+    const hasMats = hasIngredients(bp.reqs);
+    const tooCloseToPlayer = Math.hypot(finalPos.x - state.player.pos.x, finalPos.z - state.player.pos.z) < 1.35 && !bp.walkable;
+    const valid = !inWater && hasMats && !tooCloseToPlayer;
+
+    bm.targetPos.copy(finalPos);
+    bm.targetRot = finalRot;
+    bm.valid = valid;
+    bm.snapLabel = inWater ? 'Blocked: Water' : (!hasMats ? 'Missing Materials' : snapText);
+
+    bm.ghostMesh.position.copy(finalPos);
+    bm.ghostMesh.rotation.y = finalRot;
+    const colHex = valid ? 0x10b981 : 0xef4444;
+    bm.ghostMesh.traverse(child => {
+        if (child.isMesh && child.material) {
+            child.material.color.setHex(colHex);
+        }
+    });
+
+    document.getElementById('build-snap-badge').textContent = bm.snapLabel;
+}
+
+function tryPlaceCurrentBuild() {
+    const bm = state.buildMode;
+    if (!bm.active) return;
+    computeBuildPlacement();
+
+    const bp = BUILD_PIECES[bm.pieceIndex];
+    if (!hasIngredients(bp.reqs)) {
+        addLog(`Need more materials for ${bp.name}.`, 'warn');
+        return;
+    }
+    if (!bm.valid) {
+        addLog(`Cannot place ${bp.name} here (${bm.snapLabel}).`, 'warn');
+        return;
+    }
+
+    removeItems(bp.reqs);
+    sound.playBuildHammer();
+    state.stats.crafted++;
+
+    if (bp.isVehicle) {
+        const atv = spawnATV(bm.targetPos.x, bm.targetPos.y, bm.targetPos.z, bm.targetRot);
+        spawn3DParticles(bm.targetPos.clone().add(new THREE.Vector3(0, 0.6, 0)), 0xf59e0b, 12);
+        addLog(`Assembled ${bp.name}! Aim at it and press [E] to ride.`, 'good');
+        updateBuildHUD();
+        saveGameProgress(true);
+        return;
+    }
+
+    const built = createStructureMesh(bp.id, false);
+    built.group.position.copy(bm.targetPos);
+    built.group.rotation.y = bm.targetRot;
+    structureGroup.add(built.group);
+
+    const structObj = {
+        type: bp.id,
+        name: bp.name,
+        reqs: bp.reqs,
+        mesh: built.group,
+        fireMesh: built.fireMesh,
+        pointLight: built.pointLight,
+        doorPivot: built.doorPivot,
+        doorOpen: false,
+        x: bm.targetPos.x,
+        y: bm.targetPos.y,
+        z: bm.targetPos.z,
+        rot: bm.targetRot,
+        isFire: !!bp.isFire,
+        fuel: bp.isFire ? 180 : 0,
+        blocksMovement: !!bp.blocksMovement,
+        spikes: !!bp.spikes,
+        storage: bp.id === 'chest' ? new Array(16).fill(null) : null
+    };
+
+    built.group.traverse(c => { c.userData.structure = structObj; });
+    state.structures.push(structObj);
+    spawn3DParticles(bm.targetPos.clone().add(new THREE.Vector3(0, 0.6, 0)), 0xd97706, 10);
+
+    if (bp.id === 'bed') {
+        state.spawnPoint = { x: bm.targetPos.x, y: bm.targetPos.y, z: bm.targetPos.z };
+        addLog(`Constructed ${bp.name}! Respawn point bound to this bed.`, 'good');
+    } else {
+        addLog(`Constructed ${bp.name}!`, 'good');
+    }
+    updateBuildHUD();
+    saveGameProgress(true);
+}
+
+function spawnATV(x, y, z, yaw = 0) {
+    const built = createStructureMesh('atv', false);
+    built.group.position.set(x, y, z);
+    built.group.rotation.y = yaw;
+    structureGroup.add(built.group);
+
+    const atvObj = {
+        type: 'atv',
+        name: '4x4 Wilderness ATV',
+        mesh: built.group,
+        headlight: built.pointLight,
+        x, y, z,
+        yaw,
+        speed: 0
+    };
+    built.group.traverse(c => { c.userData.vehicle = atvObj; });
+    state.vehicles.push(atvObj);
+    return atvObj;
+}
+
+function mountATV(atv) {
+    if (state.buildMode.active) toggleBuildMode(false);
+    state.activeVehicle = atv;
+    state.player.yaw = atv.yaw + Math.PI;
+    state.player.pitch = -0.05;
+    document.getElementById('vehicle-hud').classList.add('active');
+    addLog("Mounted 4x4 ATV! Use [WASD] to drive, [F] to dismount.", "good");
+}
+
+function dismountATV() {
+    const atv = state.activeVehicle;
+    if (!atv) return;
+    const sideX = atv.x + Math.cos(atv.yaw) * 1.65;
+    const sideZ = atv.z - Math.sin(atv.yaw) * 1.65;
+    state.player.pos.set(sideX, getFloorHeightAt(sideX, sideZ, atv.y + 2), sideZ);
+    state.player.vel.set(0, 0, 0);
+    state.activeVehicle = null;
+    document.getElementById('vehicle-hud').classList.remove('active');
+    addLog("Dismounted 4x4 ATV.");
+    saveGameProgress(true);
+}
+
+function salvageTargetedStructure() {
+    const target = state.currentTarget;
+    if (!target || target.kind !== 'structure') {
+        addLog("Aim directly at one of your structures to salvage it.", "warn");
+        return;
+    }
+    const s = target.data;
+    structureGroup.remove(s.mesh);
+    state.structures = state.structures.filter(item => item !== s);
+
+    if (s.type === 'bed') {
+        const nextBed = getActiveBed();
+        state.spawnPoint = nextBed ? { x: nextBed.x, y: nextBed.y, z: nextBed.z } : null;
+    }
+
+    if (s.storage) {
+        s.storage.forEach(item => {
+            if (item) addItem(item.id, item.count);
+        });
+    }
+
+    if (s.reqs) {
+        for (const [id, qty] of Object.entries(s.reqs)) {
+            const refund = Math.max(1, Math.floor(qty * 0.5));
+            addItem(id, refund);
+        }
+    }
+    sound.playChop(false);
+    spawn3DParticles(new THREE.Vector3(s.x, s.y + 0.8, s.z), 0x92400e, 12);
+    addLog(`Salvaged ${s.name} (refunded 50% materials).`);
+    saveGameProgress(true);
+}
+
+function openStorageModal(chestStruct) {
+    state.activeChest = chestStruct;
+    if (document.pointerLockElement) document.exitPointerLock();
+    document.getElementById('storage-panel').classList.add('open');
+    renderStorageUI();
+}
+
+function closeStorageModal() {
+    state.activeChest = null;
+    document.getElementById('storage-panel').classList.remove('open');
+}
+
+function renderStorageUI() {
+    const chest = state.activeChest;
+    if (!chest) return;
+
+    const chestGrid = document.getElementById('chest-grid');
+    const playerGrid = document.getElementById('player-storage-grid');
+    chestGrid.innerHTML = '';
+    playerGrid.innerHTML = '';
+
+    chest.storage.forEach((slot, idx) => {
+        const div = document.createElement('div');
+        div.className = 'storage-slot';
+        if (slot) {
+            const def = ITEMS[slot.id];
+            div.innerHTML = `<span>${def.icon}</span>${slot.count > 1 ? `<span class="slot-count">${slot.count}</span>` : ''}`;
+            div.title = `Take ${def.name}`;
+            div.onclick = () => {
+                if (addItem(slot.id, slot.count)) {
+                    chest.storage[idx] = null;
+                    renderStorageUI();
+                }
+            };
+        }
+        chestGrid.appendChild(div);
+    });
+
+    state.player.inventory.forEach((slot, idx) => {
+        const div = document.createElement('div');
+        div.className = 'storage-slot';
+        if (slot) {
+            const def = ITEMS[slot.id];
+            div.innerHTML = `<span>${def.icon}</span>${slot.count > 1 ? `<span class="slot-count">${slot.count}</span>` : ''}`;
+            div.title = `Store ${def.name}`;
+            div.onclick = () => {
+                const emptyIdx = chest.storage.findIndex(s => s === null);
+                const stackIdx = def.stackable ? chest.storage.findIndex(s => s && s.id === slot.id) : -1;
+                if (stackIdx !== -1) {
+                    chest.storage[stackIdx].count += slot.count;
+                    state.player.inventory[idx] = null;
+                } else if (emptyIdx !== -1) {
+                    chest.storage[emptyIdx] = { ...slot };
+                    state.player.inventory[idx] = null;
+                } else {
+                    addLog("Storage chest is full!", "warn");
+                }
+                renderInventory();
+                renderStorageUI();
+            };
+        }
+        playerGrid.appendChild(div);
+    });
+}
+
+function useSelectedItem() {
+    const slot = state.player.inventory[state.player.selectedSlot];
+    if (!slot) return false;
+    const def = ITEMS[slot.id];
+
+    if (def.edible) {
+        const p = state.player;
+        p.health = Math.min(100, Math.max(0, p.health + (def.health || 0)));
+        if (def.stamina) p.stamina = Math.min(100, Math.max(0, p.stamina + def.stamina));
+        if (def.warmth) p.bodyTemp = Math.min(37.5, p.bodyTemp + def.warmth);
+
+        sound.playConsume(slot.id === 'clean_water' || slot.id === 'dirty_water');
+        if (def.health < 0) {
+            triggerDamageFlash();
+            addLog(`Consumed ${def.name}. Stomach illness (${def.health} HP)!`, "warn");
+        } else {
+            addLog(`Consumed ${def.name}.`, "good");
+        }
+
+        slot.count--;
+        if (slot.count <= 0) state.player.inventory[state.player.selectedSlot] = null;
+        renderInventory();
+        updateCraftingUI();
+        return true;
+    }
+    return false;
+}
+
+// ==========================================
+// 8. RAYCAST TARGETING & FIRST-PERSON ACTIONS
+// ==========================================
+function updateTargetRaycast() {
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    raycaster.far = 4.6;
+
+    const hits = raycaster.intersectObjects(worldGroup.children, true);
+    const structHits = raycaster.intersectObjects(structureGroup.children, true);
+
+    let bestHit = null;
+    for (let h of [...hits, ...structHits]) {
+        if (bestHit && h.distance >= bestHit.distance) continue;
+        let obj = h.object;
+        while (obj) {
+            if (obj.userData.interactable) {
+                bestHit = { kind: 'resource', data: obj.userData.interactable, point: h.point, distance: h.distance };
+                break;
+            }
+            if (obj.userData.animal) {
+                bestHit = { kind: 'animal', data: obj.userData.animal, point: h.point, distance: h.distance };
+                break;
+            }
+            if (obj.userData.structure) {
+                bestHit = { kind: 'structure', data: obj.userData.structure, point: h.point, distance: h.distance };
+                break;
+            }
+            if (obj.userData.vehicle) {
+                bestHit = { kind: 'vehicle', data: obj.userData.vehicle, point: h.point, distance: h.distance };
+                break;
+            }
+            obj = obj.parent;
+        }
+    }
+
+    // Look for water along aim ray up to 16 meters for fishing or 3 meters for water collection
+    if (!bestHit) {
+        const lookDir = new THREE.Vector3();
+        camera.getWorldDirection(lookDir);
+        const sel = state.player.inventory[state.player.selectedSlot];
+
+        if (sel?.id === 'fishing_rod' && lookDir.y < -0.04) {
+            for (let dist = 3; dist <= 16; dist += 1.0) {
+                const probe = state.player.pos.clone().addScaledVector(lookDir, dist);
+                if (isInWater(probe.x, probe.z)) {
+                    bestHit = { kind: 'fish_spot', point: new THREE.Vector3(probe.x, -0.35, probe.z) };
+                    break;
+                }
+            }
+        }
+
+        if (!bestHit) {
+            const lookPt = state.player.pos.clone().addScaledVector(lookDir, 3.0);
+            if (isInWater(state.player.pos.x, state.player.pos.z) || isInWater(lookPt.x, lookPt.z)) {
+                if (lookDir.y < -0.15) {
+                    bestHit = { kind: 'water', point: lookPt };
+                }
+            }
+        }
+    }
+
+    state.currentTarget = bestHit;
+}
+
+function spawn3DParticles(pos, colorHex, count = 7) {
+    const geo = new THREE.BoxGeometry(0.11, 0.11, 0.11);
+    const mat = new THREE.MeshBasicMaterial({ color: colorHex });
+    for (let i = 0; i < count; i++) {
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.copy(pos);
+        particleGroup.add(mesh);
+        state.particles.push({
+            mesh,
+            vx: (Math.random() - 0.5) * 4.5,
+            vy: 1.5 + Math.random() * 3.5,
+            vz: (Math.random() - 0.5) * 4.5,
+            life: 0.45 + Math.random() * 0.25
+        });
+    }
+}
+
+function performPrimaryAction(isInteractKey = false) {
+    if (!state.running || state.gameOver) return;
+    if (document.getElementById('crafting-panel').classList.contains('open')) return;
+    if (document.getElementById('storage-panel').classList.contains('open')) return;
+
+    if (state.activeVehicle) {
+        if (isInteractKey) dismountATV();
+        return;
+    }
+
+    if (state.fishing.active) {
+        reelInFishingLine();
+        return;
+    }
+
+    if (state.buildMode.active && !isInteractKey) {
+        tryPlaceCurrentBuild();
+        return;
+    }
+
+    const p = state.player;
+    const sel = p.inventory[p.selectedSlot];
+
+    // Shoot Hunting Rifle on Left Click
+    if (sel?.id === 'rifle' && !isInteractKey) {
+        fireHuntingRifle(sel);
+        return;
+    }
+
+    // Cast Fishing Rod into River
+    if (sel?.id === 'fishing_rod' && state.currentTarget?.kind === 'fish_spot') {
+        castFishingLine(state.currentTarget.point);
+        return;
+    }
+
+    p.swingTime = 0.28;
+
+    // If pressing E and holding edible, or no world target
+    if (!state.currentTarget) {
+        if (!isInteractKey) useSelectedItem();
+        return;
+    }
+
+    const target = state.currentTarget;
+
+    if (target.kind === 'resource') {
+        const e = target.data;
+        if (e.type === 'tree') {
+            if (e.felled) {
+                addLog(`Tree stump regrowing (${Math.ceil(e.respawnTimer)}s remaining).`);
+                return;
+            }
+            const hasAxe = sel?.id === 'axe';
+            e.hp -= hasAxe ? 2.5 : 1;
+            e.shake = 0.22;
+            sound.playChop(false);
+            spawn3DParticles(target.point, 0x78350f, 8);
+            p.stamina = Math.max(0, p.stamina - 4);
+
+            if (hasAxe) {
+                sel.durability--;
+                if (sel.durability <= 0) {
+                    addLog("Stone Hatchet broke!", "warn");
+                    p.inventory[p.selectedSlot] = null;
+                }
+                renderInventory();
+            }
+
+            if (e.hp <= 0) {
+                const woodCount = 3 + Math.floor(Math.random() * 2);
+                addItem('wood', woodCount);
+                state.stats.gathered += woodCount;
+                addLog(`Felled pine tree (+${woodCount} Firewood). Regrows in 50s.`, 'good');
+                e.felled = true;
+                e.respawnTimer = 50;
+                e.fullTree.visible = false;
+                e.stump.visible = true;
+            }
+        } else if (e.type === 'rock') {
+            e.hp -= sel?.id === 'axe' ? 1.5 : 1;
+            e.shake = 0.18;
+            sound.playChop(true);
+            spawn3DParticles(target.point, 0x94a3b8, 7);
+            p.stamina = Math.max(0, p.stamina - 5);
+
+            if (e.hp <= 0) {
+                const stoneCount = 2 + Math.floor(Math.random() * 2);
+                addItem('stone', stoneCount);
+                state.stats.gathered += stoneCount;
+                worldGroup.remove(e.mesh);
+                state.interactables = state.interactables.filter(item => item !== e);
+                addLog(`Mined flint boulder (+${stoneCount} Flint & Stone).`, 'good');
+            }
+        } else if (e.type === 'berry_bush') {
+            if (e.hasBerries) {
+                e.hasBerries = false;
+                e.regrowTimer = 70;
+                e.berries.forEach(b => b.visible = false);
+                addItem('berries', 3);
+                state.stats.gathered += 3;
+                sound.playConsume(false);
+                addLog("Harvested +3 Wild Berries.", "good");
+            } else {
+                addLog("This berry bush is empty right now.");
+            }
+        } else if (e.type === 'fiber_plant') {
+            addItem('fiber', 2);
+            state.stats.gathered += 2;
+            worldGroup.remove(e.mesh);
+            state.interactables = state.interactables.filter(item => item !== e);
+            addLog("Gathered +2 Plant Fiber.", "good");
+        } else if (e.type === 'mushroom') {
+            addItem('mushroom', 1);
+            state.stats.gathered += 1;
+            worldGroup.remove(e.mesh);
+            state.interactables = state.interactables.filter(item => item !== e);
+            addLog("Picked +1 Wild Mushroom.", "good");
+        }
+    } else if (target.kind === 'animal') {
+        const a = target.data;
+        const hasSpear = sel?.id === 'spear';
+        const hasAxe = sel?.id === 'axe';
+        const dmg = hasSpear ? 24 : (hasAxe ? 15 : 7);
+        a.hp -= dmg;
+        sound.playChop(false);
+        spawn3DParticles(target.point, 0xdc2626, 9);
+
+        if ((hasSpear || hasAxe) && sel.durability !== null) {
+            sel.durability--;
+            if (sel.durability <= 0) {
+                addLog(`${ITEMS[sel.id].name} broke!`, "warn");
+                p.inventory[p.selectedSlot] = null;
+            }
+            renderInventory();
+        }
+
+        if (a.hp <= 0) {
+            const meat = a.type === 'deer' ? 4 : (a.type === 'wolf' ? 2 : 1);
+            addItem('raw_meat', meat);
+            state.stats.hunted++;
+            worldGroup.remove(a.mesh);
+            state.animals = state.animals.filter(item => item !== a);
+            addLog(`Hunted ${a.type} (+${meat} Raw Venison).`, "good");
+        } else {
+            addLog(`Struck ${a.type} (-${dmg} HP).`);
+        }
+    } else if (target.kind === 'structure') {
+        const s = target.data;
+        if (s.type === 'doorway') {
+            s.doorOpen = !s.doorOpen;
+            sound.playDoorCreak(s.doorOpen);
+            addLog(s.doorOpen ? "Opened wooden door." : "Closed wooden door.");
+        } else if (s.type === 'chest') {
+            openStorageModal(s);
+        } else if (s.type === 'bed') {
+            state.spawnPoint = { x: s.x, y: s.y, z: s.z };
+            addLog("Home respawn point set to this Wooden Bed!", "good");
+            saveGameProgress(true);
+        } else if (s.type === 'workbench') {
+            toggleCraftingPanel(true);
+        } else if (s.type === 'water_well') {
+            addItem('clean_water', 1);
+            sound.playConsume(true);
+            addLog("Drew +1 Clean Purified Water from the well.", "good");
+        } else if (s.isFire) {
+            if (sel?.id === 'wood') {
+                slotConsumeWood(s);
+            } else {
+                toggleCraftingPanel(true);
+            }
+        }
+    } else if (target.kind === 'vehicle') {
+        mountATV(target.data);
+    } else if (target.kind === 'water') {
+        addItem('dirty_water', 1);
+        sound.playConsume(true);
+        addLog("Filled flask with Murky River Water. Boil at a fire!", "good");
+    }
+}
+
+function castFishingLine(waterPoint) {
+    const f = state.fishing;
+    f.active = true;
+    f.bobberPos.copy(waterPoint);
+    f.hasBite = false;
+    f.biteTimer = 3.5 + Math.random() * 6.5;
+    f.biteWindow = 0;
+
+    if (!f.bobberMesh) {
+        const bobberGroup = new THREE.Group();
+        const topHalf = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 10, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xef4444 })
+        );
+        const botHalf = new THREE.Mesh(
+            new THREE.SphereGeometry(0.11, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            new THREE.MeshBasicMaterial({ color: 0xffffff })
+        );
+        bobberGroup.add(topHalf, botHalf);
+        f.bobberMesh = bobberGroup;
+        worldGroup.add(f.bobberMesh);
+    }
+    f.bobberMesh.visible = true;
+    f.bobberMesh.position.copy(f.bobberPos);
+
+    if (!f.lineMesh) {
+        const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0xe2e8f0, transparent: true, opacity: 0.75 });
+        f.lineMesh = new THREE.Line(lineGeo, lineMat);
+        f.lineMesh.frustumCulled = false;
+        scene.add(f.lineMesh);
+    }
+    f.lineMesh.visible = true;
+
+    state.player.swingTime = 0.25;
+    sound.playSplash(false);
+    spawn3DParticles(f.bobberPos, 0xbae6fd, 8);
+    document.getElementById('fishing-hud').style.display = 'flex';
+    document.getElementById('fishing-status-text').textContent = '🎣 Bobber in water... Wait for a bite!';
+    addLog("Cast fishing line into the river...");
+}
+
+function stopFishing() {
+    const f = state.fishing;
+    f.active = false;
+    f.hasBite = false;
+    if (f.bobberMesh) f.bobberMesh.visible = false;
+    if (f.lineMesh) f.lineMesh.visible = false;
+    document.getElementById('fishing-hud').style.display = 'none';
+}
+
+function reelInFishingLine() {
+    const f = state.fishing;
+    if (!f.active) return;
+
+    const sel = state.player.inventory[state.player.selectedSlot];
+    state.player.swingTime = 0.28;
+
+    if (f.hasBite) {
+        sound.playSplash(true);
+        spawn3DParticles(f.bobberPos, 0x38bdf8, 12);
+        addItem('raw_fish', 1);
+        state.stats.gathered++;
+        addLog("Caught a fresh River Trout (+1 Raw River Trout)!", "good");
+
+        if (sel && sel.id === 'fishing_rod' && sel.durability !== null) {
+            sel.durability--;
+            if (sel.durability <= 0) {
+                addLog("Your Wooden Fishing Rod snapped!", "warn");
+                state.player.inventory[state.player.selectedSlot] = null;
+            }
+            renderInventory();
+        }
+    } else {
+        sound.playSplash(false);
+        addLog("Reeled in line too early — nothing on the hook.");
+    }
+
+    stopFishing();
+}
+
+function fireHuntingRifle(rifleSlot) {
+    if (state.recoilTime > 0) return;
+    if (getItemCount('ammo') <= 0) {
+        addLog("Out of Rifle Ammo! Craft more in [C].", "warn");
+        return;
+    }
+
+    removeItems({ ammo: 1 });
+    state.recoilTime = 0.35;
+    sound.playGunshot();
+
+    if (rifleSlot.durability !== null) {
+        rifleSlot.durability--;
+        if (rifleSlot.durability <= 0) {
+            addLog("Hunting Rifle jammed and broke!", "warn");
+            state.player.inventory[state.player.selectedSlot] = null;
+            renderInventory();
+        }
+    }
+
+    // Long-range ballistic raycast (130 meters)
+    const gunRay = new THREE.Raycaster();
+    gunRay.setFromCamera(new THREE.Vector2(0, 0), camera);
+    gunRay.far = 130;
+
+    const hits = gunRay.intersectObjects(worldGroup.children, true);
+    let hitAnimal = null;
+    let hitPoint = null;
+
+    for (let h of hits) {
+        let obj = h.object;
+        while (obj) {
+            if (obj.userData.animal) {
+                hitAnimal = obj.userData.animal;
+                hitPoint = h.point;
+                break;
+            }
+            if (obj.userData.interactable && (obj.userData.interactable.type === 'tree' && !obj.userData.interactable.felled || obj.userData.interactable.type === 'rock')) {
+                hitPoint = h.point;
+                break;
+            }
+            obj = obj.parent;
+        }
+        if (hitAnimal || hitPoint) break;
+    }
+
+    if (hitAnimal) {
+        hitAnimal.hp -= 45;
+        spawn3DParticles(hitPoint, 0xdc2626, 14);
+        if (hitAnimal.hp <= 0) {
+            const meat = hitAnimal.type === 'deer' ? 4 : (hitAnimal.type === 'wolf' ? 2 : 1);
+            addItem('raw_meat', meat);
+            state.stats.hunted++;
+            worldGroup.remove(hitAnimal.mesh);
+            state.animals = state.animals.filter(item => item !== hitAnimal);
+            addLog(`Clean shot! Hunted ${hitAnimal.type} (+${meat} Raw Venison).`, "good");
+        } else {
+            addLog(`Hit ${hitAnimal.type}! (${Math.ceil(hitAnimal.hp)} HP left)`);
+        }
+    } else if (hitPoint) {
+        spawn3DParticles(hitPoint, 0x94a3b8, 8);
+    }
+}
+
+function slotConsumeWood(fireStruct) {
+    const slot = state.player.inventory[state.player.selectedSlot];
+    if (slot && slot.id === 'wood') {
+        slot.count--;
+        if (slot.count <= 0) state.player.inventory[state.player.selectedSlot] = null;
+        fireStruct.fuel = Math.min(200, fireStruct.fuel + 60);
+        renderInventory();
+        addLog(`Stoked ${fireStruct.name} (+60s burn time).`, "good");
+    }
+}
+
+function updateSimulation(dt) {
+    const p = state.player;
+
+    // 1. Perpetual Daylight Cycle (tracks days survived without darkness)
+    state.timeOfDay += dt * 0.16;
+    if (state.timeOfDay >= 17.5) {
+        state.timeOfDay = 8.0;
+        state.day++;
+        const nextSeason = getSeasonForDay(state.day);
+        if (nextSeason !== state.season) {
+            applySeasonVisuals(nextSeason);
+            const seasonNames = {
+                spring: '🌸 Spring has arrived! Wildflowers bloom and the valley warms.',
+                summer: '☀️ Summer has arrived! Long warm days fill the valley.',
+                autumn: '🍂 Autumn has arrived! Crisp air turns the forest gold and amber.',
+                winter: '❄️ Winter has arrived! Snow blankets the valley and temperatures plummet!'
+            };
+            addLog(seasonNames[nextSeason], nextSeason === 'winter' ? 'warn' : 'good');
+        } else {
+            addLog(`Survived to Day ${state.day}.`, "good");
+        }
+        saveGameProgress(true);
+    }
+
+    const sunAngle = ((state.timeOfDay - 6) / 24) * Math.PI * 2;
+    const sunY = Math.max(0.55, Math.sin(sunAngle));
+    const sunX = Math.cos(sunAngle);
+
+    sunLight.position.set(p.pos.x + sunX * 65, sunY * 75, p.pos.z + 25);
+    sunLight.target.position.copy(p.pos);
+    sunLight.target.updateMatrixWorld();
+
+    sunLight.intensity = 1.25;
+    hemiLight.intensity = 0.72;
+    moonLight.intensity = 0;
+    starsPoints.material.opacity = 0;
+
+    const seasonSkyHex = {
+        spring: 0x7dd3fc,
+        summer: 0x38bdf8,
+        autumn: 0x93c5fd,
+        winter: 0xcbd5e1
+    };
+    const currentSky = new THREE.Color(seasonSkyHex[state.season] || 0x7dd3fc);
+    if (state.weather === 'rain') currentSky.lerp(new THREE.Color(0x475569), 0.45);
+    skyDome.material.color.copy(currentSky);
+    scene.fog.color.copy(currentSky);
+
+    // 2. Dynamic Weather System
+    state.weatherTimer -= dt;
+    if (state.weatherTimer <= 0) {
+        state.weatherTimer = 65 + Math.random() * 65;
+        const r = Math.random();
+        if (r < 0.52) state.weather = 'clear';
+        else if (r < 0.78) state.weather = 'wind';
+        else state.weather = 'rain';
+        const labels = {
+            clear: 'Skies are clearing.',
+            wind: state.season === 'winter' ? 'A freezing blizzard wind howls through the pines.' : 'A brisk wind rises across the valley.',
+            rain: state.season === 'winter' ? 'Heavy snow begins to fall across the valley.' : 'Rain begins to fall.'
+        };
+        addLog(labels[state.weather]);
+    }
+
+    // Update weather precipitation particles (Snow in Winter, Rain in other seasons)
+    if (state.weatherParticles) {
+        state.weatherParticles.position.set(p.pos.x, 0, p.pos.z);
+        const pMat = state.weatherParticles.material;
+        const isSnow = state.season === 'winter';
+        pMat.color.setHex(isSnow ? 0xffffff : 0x93c5fd);
+        pMat.size = isSnow ? 0.24 : 0.14;
+        const fallSpeed = isSnow ? 6.5 : 19.0;
+
+        if (state.weather === 'rain') {
+            pMat.opacity = Math.min(0.75, pMat.opacity + dt * 0.5);
+            const posAttr = state.weatherParticles.geometry.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                let py = posAttr.getY(i) - fallSpeed * dt;
+                if (py < 0) py = 24;
+                posAttr.setY(i, py);
+            }
+            posAttr.needsUpdate = true;
+        } else {
+            pMat.opacity = Math.max(0, pMat.opacity - dt * 0.5);
+        }
+    }
+
+    const inWater = isInWater(p.pos.x, p.pos.z);
+
+    // 3. First-Person Movement & Collision (or 4x4 ATV Driving)
+    if (state.activeVehicle) {
+        const atv = state.activeVehicle;
+        let throttle = 0;
+        if (state.keys['KeyW'] || state.keys['ArrowUp']) throttle += 1;
+        if (state.keys['KeyS'] || state.keys['ArrowDown']) throttle -= 0.7;
+
+        let steer = 0;
+        if (state.keys['KeyA'] || state.keys['ArrowLeft']) steer += 1;
+        if (state.keys['KeyD'] || state.keys['ArrowRight']) steer -= 1;
+
+        const maxSpeed = 20.5;
+        if (throttle !== 0) {
+            atv.speed += throttle * 24.0 * dt;
+        } else {
+            atv.speed *= Math.pow(0.18, dt);
+        }
+        atv.speed = Math.max(-9.0, Math.min(maxSpeed, atv.speed));
+
+        if (Math.abs(atv.speed) > 0.35) {
+            const turnSign = atv.speed >= 0 ? 1 : -1;
+            atv.yaw += steer * 2.15 * turnSign * dt;
+            p.yaw += steer * 2.15 * turnSign * dt;
+        }
+
+        const nx = atv.x + Math.sin(atv.yaw) * atv.speed * dt;
+        const nz = atv.z + Math.cos(atv.yaw) * atv.speed * dt;
+
+        let blocked = Math.hypot(nx, nz) >= WORLD_RADIUS - 15;
+        if (!blocked) {
+            for (let obj of state.interactables) {
+                if ((obj.type === 'tree' && !obj.felled) || obj.type === 'rock') {
+                    if (Math.hypot(obj.x - nx, obj.z - nz) < obj.radius + 0.95) {
+                        blocked = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!blocked && checkStructureCollision(nx, nz, atv.y)) blocked = true;
+
+        if (!blocked) {
+            atv.x = nx;
+            atv.z = nz;
+        } else {
+            atv.speed *= -0.25;
+        }
+
+        const targetGroundY = getFloorHeightAt(atv.x, atv.z, atv.y + 1.5);
+        atv.y += (targetGroundY - atv.y) * Math.min(1, dt * 14);
+        atv.mesh.position.set(atv.x, atv.y, atv.z);
+        atv.mesh.rotation.y = atv.yaw;
+
+        // Sync rider position & camera
+        p.pos.set(atv.x, atv.y + 0.45, atv.z);
+        p.onGround = true;
+        camera.position.set(atv.x, atv.y + 1.62, atv.z);
+        camera.rotation.y = p.yaw;
+        camera.rotation.x = p.pitch;
+
+        const kmh = Math.round(Math.abs(atv.speed) * 3.6);
+        document.getElementById('atv-speed').textContent = `${kmh} km/h`;
+
+        state.engineSoundTimer -= dt;
+        if (state.engineSoundTimer <= 0) {
+            state.engineSoundTimer = 0.09;
+            sound.playEngineHum(Math.abs(atv.speed) / maxSpeed);
+        }
+
+        updateViewModel(dt, false);
+    } else {
+        const forward = new THREE.Vector3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw));
+        const right = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
+        const moveDir = new THREE.Vector3();
+
+        if (state.keys['KeyW'] || state.keys['ArrowUp']) moveDir.add(forward);
+        if (state.keys['KeyS'] || state.keys['ArrowDown']) moveDir.sub(forward);
+        if (state.keys['KeyD'] || state.keys['ArrowRight']) moveDir.add(right);
+        if (state.keys['KeyA'] || state.keys['ArrowLeft']) moveDir.sub(right);
+
+        const isMoving = moveDir.lengthSq() > 0;
+        if (isMoving) moveDir.normalize();
+
+        const isSprinting = (state.keys['ShiftLeft'] || state.keys['ShiftRight']) && isMoving && p.stamina > 5;
+        let speed = isSprinting ? 8.8 : 5.2;
+        if (inWater) speed *= 0.56;
+
+        if (isMoving) {
+            const nextX = p.pos.x + moveDir.x * speed * dt;
+            const nextZ = p.pos.z + moveDir.z * speed * dt;
+
+            // Tree & Boulder cylinder collision
+            let blocked = false;
+            for (let obj of state.interactables) {
+                if ((obj.type === 'tree' && !obj.felled) || obj.type === 'rock') {
+                    if (Math.hypot(obj.x - nextX, obj.z - nextZ) < obj.radius + 0.45) {
+                        blocked = true;
+                        break;
+                    }
+                }
+            }
+
+            // World boundary & structure wall collision
+            if (!blocked && Math.hypot(nextX, nextZ) < WORLD_RADIUS - 14) {
+                if (!checkStructureCollision(nextX, p.pos.z, p.pos.y)) p.pos.x = nextX;
+                if (!checkStructureCollision(p.pos.x, nextZ, p.pos.y)) p.pos.z = nextZ;
+            }
+
+            if (isSprinting) p.stamina = Math.max(0, p.stamina - 15 * dt);
+
+            p.bobTime += dt * (isSprinting ? 13 : 8.5);
+            p.stepAccum += speed * dt;
+            if (p.stepAccum > (isSprinting ? 2.6 : 2.1)) {
+                p.stepAccum = 0;
+                sound.playStep(inWater);
+            }
+        } else {
+            p.bobTime = 0;
+        }
+
+        if (!isSprinting) {
+            p.stamina = Math.min(100, p.stamina + 12 * dt);
+        }
+
+        // Jump & Gravity
+        if (state.keys['Space'] && p.onGround && p.stamina >= 8) {
+            p.vel.y = 6.8;
+            p.onGround = false;
+            p.stamina -= 8;
+        }
+
+        p.vel.y -= 18.0 * dt;
+        p.pos.y += p.vel.y * dt;
+
+        const groundH = getFloorHeightAt(p.pos.x, p.pos.z, p.pos.y);
+        if (p.pos.y <= groundH) {
+            p.pos.y = groundH;
+            p.vel.y = 0;
+            p.onGround = true;
+        }
+
+        // Sync Camera & Viewmodel
+        const headBobY = isMoving && p.onGround ? Math.sin(p.bobTime) * 0.055 : 0;
+        camera.position.set(p.pos.x, p.pos.y + p.height + headBobY, p.pos.z);
+        camera.rotation.y = p.yaw;
+        camera.rotation.x = p.pitch;
+
+        updateViewModel(dt, isMoving);
+    }
+
+    // 4. Structures, Doors & Campfire Fuel
+    let nearFireRatio = 0;
+    for (let s of state.structures) {
+        if (s.type === 'doorway' && s.doorPivot) {
+            const targetAngle = s.doorOpen ? -Math.PI * 0.48 : 0;
+            s.doorPivot.rotation.y += (targetAngle - s.doorPivot.rotation.y) * Math.min(1, dt * 10);
+        }
+        if (s.isFire && s.fuel > 0) {
+            s.fuel -= dt;
+            const d = Math.hypot(s.x - p.pos.x, s.z - p.pos.z);
+            if (d < 8) nearFireRatio = Math.max(nearFireRatio, 1 - d / 8);
+
+            if (s.fireMesh) {
+                const ratio = Math.max(0.15, s.fuel / 140);
+                s.fireMesh.scale.set(ratio, ratio * (0.85 + Math.random() * 0.35), ratio);
+                s.fireMesh.visible = s.fuel > 0;
+            }
+            if (s.pointLight) {
+                s.pointLight.intensity = s.fuel > 0 ? (2.2 + Math.random() * 0.7) : 0;
+            }
+        }
+    }
+
+    // 5. Ambient Temperature & Thermoregulation
+    const seasonBaseTemp = { spring: 14, summer: 23, autumn: 10, winter: -4 };
+    let amb = (seasonBaseTemp[state.season] ?? 14) - (state.weather === 'rain' ? 4 : 0) - (state.weather === 'wind' ? 3 : 0);
+    state.ambientTemp = Math.round(amb);
+
+    const sheltered = isPlayerSheltered();
+    if (inWater) {
+        p.wetness = Math.min(100, p.wetness + 30 * dt);
+    } else if (state.weather === 'rain' && !sheltered) {
+        p.wetness = Math.min(100, p.wetness + 8 * dt);
+    } else {
+        p.wetness = Math.max(0, p.wetness - (nearFireRatio > 0 ? 18 : 4) * dt);
+    }
+
+    const sel = p.inventory[p.selectedSlot];
+    const holdingTorch = sel?.id === 'torch';
+    let targetTemp = 36.8;
+    if (amb < 5) targetTemp -= (5 - amb) * 0.24;
+    if (p.wetness > 15) targetTemp -= (p.wetness / 100) * 2.1;
+    if (sheltered) targetTemp += 1.6;
+    if (nearFireRatio > 0) targetTemp += nearFireRatio * 5.2;
+    if (holdingTorch) targetTemp += 1.9;
+
+    targetTemp = Math.max(31.0, Math.min(37.6, targetTemp));
+    p.bodyTemp += (targetTemp - p.bodyTemp) * 0.12 * dt;
+
+    // 6. Health & Hypothermia Check
+    let hpDelta = 0;
+    let cause = "Succumbed to the northern wilderness.";
+    if (p.bodyTemp < 34.5) {
+        hpDelta -= (34.5 - p.bodyTemp) * 1.45;
+        cause = "Hypothermia froze your core in the bitter cold.";
+    }
+    if (hpDelta === 0 && p.bodyTemp >= 36.2 && p.health < 100) {
+        hpDelta = 1.2;
+    }
+
+    p.health = Math.max(0, Math.min(100, p.health + hpDelta * dt));
+    if (p.health <= 0) {
+        triggerGameOver(cause);
+        return;
+    }
+
+    // 7. Resource Shakes, Tree Respawns & Berry Regrowth
+    for (let obj of state.interactables) {
+        if (obj.shake > 0) {
+            obj.shake = Math.max(0, obj.shake - dt);
+            obj.mesh.position.x = obj.x + (Math.random() - 0.5) * 0.16;
+        } else {
+            obj.mesh.position.x = obj.x;
+        }
+        if (obj.type === 'tree' && obj.felled) {
+            obj.respawnTimer -= dt;
+            if (obj.respawnTimer <= 0) {
+                // Ensure no player-built structure is directly blocking the tree spot
+                const blockedByBuild = state.structures.some(s => Math.hypot(s.x - obj.x, s.z - obj.z) < 2.6);
+                if (blockedByBuild) {
+                    obj.respawnTimer = 15;
+                } else {
+                    obj.felled = false;
+                    obj.hp = 5;
+                    obj.fullTree.visible = true;
+                    obj.stump.visible = false;
+                }
+            }
+        }
+        if (obj.type === 'berry_bush' && !obj.hasBerries) {
+            obj.regrowTimer -= dt;
+            if (obj.regrowTimer <= 0) {
+                obj.hasBerries = true;
+                obj.berries.forEach(b => b.visible = true);
+            }
+        }
+    }
+
+    // 8. Peaceful Wildlife AI (Wandering & Fleeing)
+    for (let a of state.animals) {
+        const dx = p.pos.x - a.x;
+        const dz = p.pos.z - a.z;
+        const dist = Math.hypot(dx, dz);
+
+        if (dist < 13) {
+            a.vx = (-dx / dist) * (a.speed * 0.85);
+            a.vz = (-dz / dist) * (a.speed * 0.85);
+        } else {
+            wanderAnimal(a, dt);
+        }
+
+        const nx = a.x + a.vx * dt;
+        const nz = a.z + a.vz * dt;
+        if (Math.hypot(nx, nz) < WORLD_RADIUS - 18 && !isInWater(nx, nz) && !checkStructureCollision(nx, nz, a.y)) {
+            a.x = nx;
+            a.z = nz;
+        } else {
+            a.vx *= -1;
+            a.vz *= -1;
+        }
+
+        a.y = getTerrainHeight(a.x, a.z);
+        a.mesh.position.set(a.x, a.y, a.z);
+        if (Math.hypot(a.vx, a.vz) > 0.1) {
+            a.mesh.rotation.y = Math.atan2(a.vx, a.vz);
+        }
+    }
+
+    // 9. 3D Particles & Active Fishing Line Update
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+        const pt = state.particles[i];
+        pt.life -= dt;
+        pt.vy -= 11 * dt;
+        pt.mesh.position.x += pt.vx * dt;
+        pt.mesh.position.y += pt.vy * dt;
+        pt.mesh.position.z += pt.vz * dt;
+        if (pt.life <= 0) {
+            particleGroup.remove(pt.mesh);
+            state.particles.splice(i, 1);
+        }
+    }
+
+    if (state.fishing.active) {
+        const f = state.fishing;
+        const selItem = p.inventory[p.selectedSlot];
+        const distToBobber = Math.hypot(p.pos.x - f.bobberPos.x, p.pos.z - f.bobberPos.z);
+
+        if (selItem?.id !== 'fishing_rod' || distToBobber > 20 || state.buildMode.active) {
+            stopFishing();
+        } else {
+            if (!f.hasBite) {
+                f.biteTimer -= dt;
+                f.bobberMesh.position.y = f.bobberPos.y + Math.sin(performance.now() * 0.005) * 0.035;
+                if (f.biteTimer <= 0) {
+                    f.hasBite = true;
+                    f.biteWindow = 3.2;
+                    sound.playSplash(true);
+                    spawn3DParticles(f.bobberPos, 0x7dd3fc, 10);
+                    document.getElementById('fishing-status-text').textContent = '❗ FISH ON THE LINE! REEL IN NOW!';
+                    addLog("A fish is biting! Click or press [E] to reel it in!", "good");
+                }
+            } else {
+                f.biteWindow -= dt;
+                f.bobberMesh.position.y = f.bobberPos.y - 0.08 + Math.sin(performance.now() * 0.035) * 0.06;
+                if (f.biteWindow <= 0) {
+                    f.hasBite = false;
+                    f.biteTimer = 4.0 + Math.random() * 5.0;
+                    document.getElementById('fishing-status-text').textContent = '🎣 The fish got away... Waiting again...';
+                    addLog("The fish slipped off the hook!", "warn");
+                }
+            }
+
+            // Update 3D fishing line from rod tip to bobber
+            if (f.lineMesh && rodTipDummy) {
+                camera.updateMatrixWorld();
+                const tipWorld = new THREE.Vector3();
+                rodTipDummy.getWorldPosition(tipWorld);
+                const posAttr = f.lineMesh.geometry.attributes.position;
+                posAttr.setXYZ(0, tipWorld.x, tipWorld.y, tipWorld.z);
+                posAttr.setXYZ(1, f.bobberMesh.position.x, f.bobberMesh.position.y + 0.08, f.bobberMesh.position.z);
+                posAttr.needsUpdate = true;
+            }
+        }
+    }
+
+    updateTargetRaycast();
+    computeBuildPlacement();
+    sound.updateAmbience(state.weather, nearFireRatio);
+    updateHUD();
+}
+
+function wanderAnimal(a, dt) {
+    a.wanderTimer -= dt;
+    if (a.wanderTimer <= 0) {
+        a.wanderTimer = 2 + Math.random() * 4;
+        if (Math.random() < 0.4) {
+            a.vx = 0;
+            a.vz = 0;
+        } else {
+            const ang = Math.random() * Math.PI * 2;
+            a.vx = Math.cos(ang) * (a.speed * 0.35);
+            a.vz = Math.sin(ang) * (a.speed * 0.35);
+        }
+    }
+}
+
+function updateViewModel(dt, isMoving) {
+    const p = state.player;
+    const sel = p.inventory[p.selectedSlot];
+
+    // Automatically unscope if rifle is unequipped, driving, or building
+    if (state.isScoped && (sel?.id !== 'rifle' || state.activeVehicle || state.buildMode.active)) {
+        setRifleScoped(false);
+    }
+
+    // Smoothly interpolate camera FOV for rifle scope zoom
+    const targetFov = state.isScoped ? 26 : 72;
+    if (Math.abs(camera.fov - targetFov) > 0.05) {
+        camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 14);
+        camera.updateProjectionMatrix();
+    }
+
+    axeMesh.visible = sel?.id === 'axe';
+    spearMesh.visible = sel?.id === 'spear';
+    torchMesh.visible = sel?.id === 'torch';
+    rifleMesh.visible = sel?.id === 'rifle' && !state.activeVehicle && !state.isScoped;
+    handMesh.visible = !state.isScoped;
+    rodMesh.visible = sel?.id === 'fishing_rod' && !state.activeVehicle;
+
+    if (sel?.id === 'torch') {
+        sel.durability -= dt * 0.5;
+        torchLight.intensity = 2.0 + Math.random() * 0.6;
+        torchFlameMesh.scale.setScalar(0.85 + Math.random() * 0.3);
+        if (sel.durability <= 0) {
+            p.inventory[p.selectedSlot] = null;
+            addLog("Your torch burned out.", "warn");
+            renderInventory();
+        }
+    } else {
+        torchLight.intensity = 0;
+    }
+
+    // Bob, Swing & Rifle Recoil animation
+    const bobX = isMoving ? Math.cos(p.bobTime * 0.5) * 0.02 : 0;
+    const bobY = isMoving ? Math.abs(Math.sin(p.bobTime * 0.5)) * 0.02 : 0;
+    let swingRot = 0;
+    if (p.swingTime > 0) {
+        p.swingTime = Math.max(0, p.swingTime - dt);
+        swingRot = Math.sin((1 - p.swingTime / 0.28) * Math.PI) * 0.85;
+    }
+
+    let recoilKick = 0;
+    if (state.recoilTime > 0) {
+        state.recoilTime = Math.max(0, state.recoilTime - dt);
+        recoilKick = Math.sin((state.recoilTime / 0.35) * Math.PI);
+        const showFlash = state.recoilTime > 0.28;
+        muzzleFlashMesh.visible = showFlash;
+        muzzleLight.intensity = showFlash ? 4.5 : 0;
+    } else {
+        muzzleFlashMesh.visible = false;
+        muzzleLight.intensity = 0;
+    }
+
+    viewModelGroup.position.set(0.32 + bobX, -0.28 - bobY + recoilKick * 0.03, -0.48 - swingRot * 0.14 + recoilKick * 0.14);
+    viewModelGroup.rotation.x = -swingRot + recoilKick * 0.22;
+}
+
+function setRifleScoped(scoped) {
+    const sel = state.player.inventory[state.player.selectedSlot];
+    if (scoped && (sel?.id !== 'rifle' || state.activeVehicle || state.buildMode.active)) {
+        return;
+    }
+    state.isScoped = scoped;
+    const scopeEl = document.getElementById('scope-overlay');
+    const crosshairEl = document.getElementById('crosshair');
+    if (scopeEl) scopeEl.classList.toggle('active', scoped);
+    if (crosshairEl) crosshairEl.style.display = scoped ? 'none' : 'flex';
+}
+
+// ==========================================
+// 10. UI RENDERING & EVENT HANDLERS
+// ==========================================
+function updateHUD() {
+    const p = state.player;
+    document.getElementById('health-bar').style.width = `${p.health}%`;
+    document.getElementById('val-health').textContent = `${Math.ceil(p.health)}%`;
+
+    document.getElementById('stamina-bar').style.width = `${p.stamina}%`;
+    document.getElementById('val-stamina').textContent = `${Math.ceil(p.stamina)}%`;
+
+    const tempPct = Math.max(0, Math.min(100, ((p.bodyTemp - 31) / 6.5) * 100));
+    document.getElementById('temp-bar').style.width = `${tempPct}%`;
+    document.getElementById('val-temp').textContent = `${p.bodyTemp.toFixed(1)}°C`;
+
+    // Status Badges
+    const badges = document.getElementById('status-badges');
+    badges.innerHTML = '';
+    if (p.bodyTemp < 35.0) badges.innerHTML += `<span class="badge badge-cold">❄️ Hypothermia</span>`;
+    else if (isNearActiveFire(6.5)) badges.innerHTML += `<span class="badge badge-warm">🔥 Warming</span>`;
+    if (p.wetness > 20) badges.innerHTML += `<span class="badge badge-wet">💧 Wet (${Math.round(p.wetness)}%)</span>`;
+
+    // Frost vignette
+    const frost = document.getElementById('frost-vignette');
+    if (p.bodyTemp < 35.5) {
+        const intensity = Math.min(1, (35.5 - p.bodyTemp) / 3.5);
+        frost.style.boxShadow = `inset 0 0 ${110 + intensity * 90}px rgba(56, 189, 248, ${0.22 + intensity * 0.45})`;
+    } else {
+        frost.style.boxShadow = `inset 0 0 110px rgba(0, 0, 0, 0.7)`;
+    }
+
+    // Compass
+    const dirs = ['N', 'NW', 'W', 'SW', 'S', 'SE', 'E', 'NE'];
+    const deg = (((p.yaw * 180 / Math.PI) % 360) + 360) % 360;
+    const idx = Math.round(deg / 45) % 8;
+    document.getElementById('compass-dir').textContent = dirs[idx];
+    document.getElementById('comp-left').textContent = dirs[(idx + 1) % 8];
+    document.getElementById('comp-right').textContent = dirs[(idx + 7) % 8];
+
+    // Time & Weather
+    const hrs = Math.floor(state.timeOfDay).toString().padStart(2, '0');
+    const mins = Math.floor((state.timeOfDay % 1) * 60).toString().padStart(2, '0');
+    document.getElementById('day-display').textContent = `DAY ${state.day} • ${hrs}:${mins}`;
+    const sIcons = { spring: '🌸 Spring', summer: '☀️ Summer', autumn: '🍂 Autumn', winter: '❄️ Winter' };
+    document.getElementById('season-display').textContent = sIcons[state.season] || '🌸 Spring';
+    const wIcons = {
+        clear: '☀️ Clear',
+        wind: state.season === 'winter' ? '🌬️ Blizzard Wind' : '💨 Gusty Wind',
+        rain: state.season === 'winter' ? '🌨️ Snowfall' : '🌧️ Rainfall'
+    };
+    document.getElementById('weather-display').textContent = wIcons[state.weather];
+    document.getElementById('ambient-temp').textContent = `${state.ambientTemp}°C`;
+
+    // Crosshair & Interaction Prompt
+    const crosshair = document.getElementById('crosshair');
+    const hint = document.getElementById('interaction-hint');
+    const target = state.currentTarget;
+
+    if (target) {
+        crosshair.classList.add('active');
+        hint.style.display = 'block';
+        if (target.kind === 'resource') {
+            const labels = {
+                tree: target.data.felled ? `Pine Stump (Regrows in ${Math.ceil(target.data.respawnTimer)}s)` : 'Chop Pine Tree [Click / E]',
+                rock: 'Mine Flint Boulder [Click / E]',
+                berry_bush: target.data.hasBerries ? 'Harvest Wild Berries [E]' : 'Empty Berry Bush',
+                fiber_plant: 'Gather Plant Fiber [E]',
+                mushroom: 'Pick Wild Mushroom [E]'
+            };
+            hint.textContent = labels[target.data.type];
+        } else if (target.kind === 'animal') {
+            hint.textContent = `Hunt ${target.data.type.toUpperCase()} (${Math.ceil(target.data.hp)} HP) [Click]`;
+        } else if (target.kind === 'structure') {
+            if (target.data.type === 'doorway') {
+                hint.textContent = `${target.data.doorOpen ? 'Close' : 'Open'} Door [E] • Salvage [X]`;
+            } else if (target.data.type === 'chest') {
+                hint.textContent = `Open Storage Chest [E] • Salvage [X]`;
+            } else if (target.data.type === 'bed') {
+                hint.textContent = `Set Respawn & Rest [E] • Salvage [X]`;
+            } else if (target.data.type === 'workbench') {
+                hint.textContent = `Use Craftsman Workbench [E] • Salvage [X]`;
+            } else if (target.data.type === 'water_well') {
+                hint.textContent = `Draw Clean Water [E] • Salvage [X]`;
+            } else if (target.data.isFire) {
+                hint.textContent = `${target.data.name} (${Math.ceil(target.data.fuel)}s) [E: Cook / Wood: Stoke]`;
+            } else {
+                hint.textContent = `${target.data.name} [X: Salvage]`;
+            }
+        } else if (target.kind === 'vehicle') {
+            hint.textContent = `Ride 4x4 Wilderness ATV [E]`;
+        } else if (target.kind === 'fish_spot') {
+            hint.textContent = `Cast Fishing Line into River [Click / E]`;
+        } else if (target.kind === 'water') {
+            hint.textContent = 'Collect Murky River Water [E]';
+        }
+    } else {
+        crosshair.classList.remove('active');
+        hint.style.display = 'none';
+    }
+
+    // Lock banner
+    const lockBanner = document.getElementById('lock-banner');
+    const craftOpen = document.getElementById('crafting-panel').classList.contains('open');
+    const storageOpen = document.getElementById('storage-panel').classList.contains('open');
+    lockBanner.style.display = (state.running && !state.gameOver && !craftOpen && !storageOpen && !document.pointerLockElement) ? 'block' : 'none';
+}
+
+function renderInventory() {
+    const bar = document.getElementById('inventory-bar');
+    bar.innerHTML = '';
+
+    for (let i = 0; i < 8; i++) {
+        const slot = state.player.inventory[i];
+        const div = document.createElement('div');
+        div.className = `inv-slot ${state.player.selectedSlot === i ? 'selected' : ''}`;
+        div.innerHTML = `<span class="slot-key">${i + 1}</span>`;
+
+        if (slot) {
+            const def = ITEMS[slot.id];
+            div.innerHTML += `<span class="slot-icon">${def.icon}</span>`;
+            if (def.stackable && slot.count > 1) {
+                div.innerHTML += `<span class="slot-count">${slot.count}</span>`;
+            } else if (slot.durability !== null) {
+                const pct = Math.max(0, (slot.durability / def.maxDurability) * 100);
+                div.innerHTML += `<div class="durability-bar"><div class="durability-fill" style="width:${pct}%"></div></div>`;
+            }
+        }
+
+        div.addEventListener('click', () => {
+            if (state.player.selectedSlot === i) {
+                useSelectedItem();
+            } else {
+                state.player.selectedSlot = i;
+                renderInventory();
+            }
+        });
+
+        bar.appendChild(div);
+    }
+
+    const sel = state.player.inventory[state.player.selectedSlot];
+    const lbl = document.getElementById('equipped-label');
+    if (sel) {
+        const def = ITEMS[sel.id];
+        lbl.textContent = `${def.name}${def.stackable ? ` (x${sel.count})` : ''} — ${def.desc}`;
+    } else {
+        lbl.textContent = 'Empty Hands (Click or [E] to gather)';
+    }
+}
+
+function updateCraftingUI() {
+    const list = document.getElementById('craft-list');
+    list.innerHTML = '';
+
+    document.getElementById('tab-craft').classList.toggle('active', state.craftTab === 'craft');
+    document.getElementById('tab-build').classList.toggle('active', state.craftTab === 'build');
+
+    if (state.craftTab === 'craft') {
+        for (let r of RECIPES) {
+            const possible = canCraft(r);
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'craft-item';
+
+            let reqHtml = '';
+            for (const [id, needed] of Object.entries(r.reqs)) {
+                const have = getItemCount(id);
+                reqHtml += `<span class="${have >= needed ? 'req-ok' : 'req-no'}">${ITEMS[id].icon} ${ITEMS[id].name}: ${have}/${needed}</span>`;
+            }
+            if (r.nearFire) {
+                const near = isNearActiveFire(5.5);
+                reqHtml += `<span class="${near ? 'req-ok' : 'req-no'}">🔥 Near Campfire</span>`;
+            }
+
+            itemDiv.innerHTML = `
+                <div class="craft-info">
+                    <div class="craft-title"><span>${r.icon}</span><span>${r.name}</span></div>
+                    <div class="craft-desc">${r.desc}</div>
+                    <div class="craft-reqs">${reqHtml}</div>
+                </div>
+                <button class="craft-btn" ${possible ? '' : 'disabled'}>Craft</button>
+            `;
+
+            itemDiv.querySelector('button').addEventListener('click', () => craftItem(r));
+            list.appendChild(itemDiv);
+        }
+    } else {
+        BUILD_PIECES.forEach((bp, idx) => {
+            const possible = hasIngredients(bp.reqs);
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'craft-item';
+
+            let reqHtml = '';
+            for (const [id, needed] of Object.entries(bp.reqs)) {
+                const have = getItemCount(id);
+                reqHtml += `<span class="${have >= needed ? 'req-ok' : 'req-no'}">${ITEMS[id].icon} ${ITEMS[id].name}: ${have}/${needed}</span>`;
+            }
+
+            itemDiv.innerHTML = `
+                <div class="craft-info">
+                    <div class="craft-title"><span>${bp.icon}</span><span>${bp.name}</span></div>
+                    <div class="craft-desc">${bp.desc}</div>
+                    <div class="craft-reqs">${reqHtml}</div>
+                </div>
+                <button class="craft-btn" ${possible ? '' : 'disabled'}>Select [B]</button>
+            `;
+
+            itemDiv.querySelector('button').addEventListener('click', () => {
+                toggleCraftingPanel(false);
+                selectBuildPiece(idx);
+                if (renderer?.domElement) renderer.domElement.requestPointerLock();
+            });
+            list.appendChild(itemDiv);
+        });
+    }
+}
+
+function toggleCraftingPanel(forceState = null) {
+    const panel = document.getElementById('crafting-panel');
+    const isOpen = forceState !== null ? forceState : !panel.classList.contains('open');
+    if (isOpen) {
+        closeStorageModal();
+        if (state.buildMode.active) toggleBuildMode(false);
+        panel.classList.add('open');
+        updateCraftingUI();
+        if (document.pointerLockElement) document.exitPointerLock();
+    } else {
+        panel.classList.remove('open');
+    }
+}
+
+function addLog(msg, type = 'normal') {
+    const panel = document.getElementById('log-panel');
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = msg;
+    panel.prepend(entry);
+    while (panel.children.length > 5) {
+        panel.removeChild(panel.lastChild);
+    }
+}
+
+function triggerDamageFlash() {
+    const flash = document.getElementById('damage-flash');
+    flash.style.opacity = '1';
+    setTimeout(() => { flash.style.opacity = '0'; }, 180);
+}
+
+function triggerGameOver(cause) {
+    state.gameOver = true;
+    state.running = false;
+    if (document.pointerLockElement) document.exitPointerLock();
+    document.getElementById('death-cause').textContent = cause;
+    document.getElementById('stat-days').textContent = state.day;
+    document.getElementById('stat-gathered').textContent = state.stats.gathered;
+    document.getElementById('stat-crafted').textContent = state.stats.crafted;
+    document.getElementById('stat-hunted').textContent = state.stats.hunted;
+
+    const bedBtn = document.getElementById('btn-respawn-bed');
+    const activeBed = getActiveBed();
+    if (bedBtn) {
+        bedBtn.style.display = (state.spawnPoint || activeBed) ? 'inline-block' : 'none';
+    }
+    document.getElementById('gameover-screen').style.display = 'flex';
+}
+
+function respawnAtBed() {
+    const activeBed = getActiveBed();
+    const sp = state.spawnPoint || (activeBed ? { x: activeBed.x, y: activeBed.y, z: activeBed.z } : null);
+    if (!sp) {
+        startNewGame(true);
+        return;
+    }
+    sound.init();
+    state.gameOver = false;
+    state.running = true;
+    state.player.pos.set(sp.x, sp.y + 0.4, sp.z);
+    state.player.vel.set(0, 0, 0);
+    state.player.health = 100;
+    state.player.stamina = 100;
+    state.player.bodyTemp = 37.0;
+    state.player.wetness = 0;
+
+    document.getElementById('gameover-screen').style.display = 'none';
+    addLog("Respawned at your Wooden Bed!", "good");
+    renderInventory();
+    updateHUD();
+    saveGameProgress(true);
+
+    if (renderer?.domElement) {
+        renderer.domElement.requestPointerLock();
+    }
+}
+
+// ==========================================
+// 11. INPUT BINDINGS & MAIN GAME LOOP
+// ==========================================
+function setupEvents() {
+    window.addEventListener('keydown', e => {
+        state.keys[e.code] = true;
+
+        if (e.code === 'KeyB' && state.running && !state.gameOver) {
+            toggleBuildMode();
+            if (state.buildMode.active && renderer?.domElement) {
+                renderer.domElement.requestPointerLock();
+            }
+        }
+        if (e.code === 'KeyR' && state.buildMode.active) {
+            state.buildMode.rotation += Math.PI / 4;
+        }
+        if (e.code === 'KeyQ' && state.buildMode.active) {
+            selectBuildPiece(state.buildMode.pieceIndex + 1);
+        }
+        if (e.code === 'KeyX' && state.running && !state.gameOver) {
+            salvageTargetedStructure();
+        }
+        if (e.code === 'KeyZ' && state.running && !state.gameOver) {
+            const sel = state.player.inventory[state.player.selectedSlot];
+            if (sel?.id === 'rifle') {
+                setRifleScoped(!state.isScoped);
+            } else {
+                addLog("Equip the Hunting Rifle to use the scope [Z].", "warn");
+            }
+        }
+        if (e.code === 'KeyC') {
+            toggleCraftingPanel();
+        }
+        if (e.code === 'KeyE') {
+            if (document.getElementById('storage-panel').classList.contains('open')) {
+                closeStorageModal();
+                if (renderer?.domElement) renderer.domElement.requestPointerLock();
+            } else {
+                performPrimaryAction(true);
+            }
+        }
+        if (e.code === 'KeyF' && state.activeVehicle) {
+            dismountATV();
+        }
+        if (e.code >= 'Digit1' && e.code <= 'Digit8') {
+            const idx = parseInt(e.code.replace('Digit', ''), 10) - 1;
+            if (state.buildMode.active) {
+                selectBuildPiece(idx);
+            } else {
+                state.player.selectedSlot = idx;
+                renderInventory();
+            }
+        }
+    });
+
+    window.addEventListener('keyup', e => {
+        state.keys[e.code] = false;
+    });
+
+    window.addEventListener('mousemove', e => {
+        if (document.pointerLockElement === renderer.domElement && state.running && !state.gameOver) {
+            const sensitivity = state.isScoped ? 0.00085 : 0.0022;
+            state.player.yaw -= e.movementX * sensitivity;
+            state.player.pitch -= e.movementY * sensitivity;
+            state.player.pitch = Math.max(-Math.PI / 2 + 0.08, Math.min(Math.PI / 2 - 0.08, state.player.pitch));
+        }
+    });
+
+    window.addEventListener('wheel', e => {
+        if (!state.running || state.gameOver) return;
+        if (document.getElementById('crafting-panel').classList.contains('open')) return;
+        if (document.getElementById('storage-panel').classList.contains('open')) return;
+
+        const dir = e.deltaY > 0 ? 1 : -1;
+        if (state.buildMode.active) {
+            selectBuildPiece(state.buildMode.pieceIndex + dir);
+        } else {
+            state.player.selectedSlot = (state.player.selectedSlot + dir + 8) % 8;
+            renderInventory();
+        }
+    });
+
+    window.addEventListener('mousedown', e => {
+        if (!state.running || state.gameOver) return;
+        if (e.target.closest('.hud-panel') || e.target.closest('.overlay-screen')) return;
+
+        if (document.pointerLockElement !== renderer.domElement) {
+            renderer.domElement.requestPointerLock();
+            return;
+        }
+        if (e.button === 0) {
+            performPrimaryAction(false);
+        } else if (e.button === 2) {
+            if (state.buildMode.active) {
+                salvageTargetedStructure();
+            } else if (state.player.inventory[state.player.selectedSlot]?.id === 'rifle') {
+                setRifleScoped(!state.isScoped);
+            }
+        }
+    });
+
+    window.addEventListener('contextmenu', e => e.preventDefault());
+
+    document.getElementById('lock-banner').addEventListener('click', () => {
+        if (renderer?.domElement) renderer.domElement.requestPointerLock();
+    });
+
+    document.getElementById('btn-build').addEventListener('click', () => {
+        toggleBuildMode();
+        if (state.buildMode.active && renderer?.domElement) renderer.domElement.requestPointerLock();
+    });
+    document.getElementById('btn-craft').addEventListener('click', () => toggleCraftingPanel());
+    document.getElementById('btn-close-craft').addEventListener('click', () => toggleCraftingPanel(false));
+    document.getElementById('btn-close-storage').addEventListener('click', () => closeStorageModal());
+
+    document.getElementById('tab-craft').addEventListener('click', () => {
+        state.craftTab = 'craft';
+        updateCraftingUI();
+    });
+    document.getElementById('tab-build').addEventListener('click', () => {
+        state.craftTab = 'build';
+        updateCraftingUI();
+    });
+
+    document.getElementById('btn-mute').addEventListener('click', e => {
+        sound.init();
+        const muted = sound.toggleMute();
+        e.target.textContent = muted ? '🔇' : '🔊';
+    });
+
+    document.getElementById('btn-sleep').addEventListener('click', () => {
+        if (!state.running || state.gameOver) return;
+        const nearShelter = isPlayerSheltered();
+        const nearFire = isNearActiveFire(6.5);
+
+        if (!nearShelter && !nearFire) {
+            addLog("Build a Bed, Tarp Shelter, or lit Campfire/Stove to rest safely!", "warn");
+            return;
+        }
+
+        state.timeOfDay += 4;
+        if (state.timeOfDay >= 17.5) {
+            state.timeOfDay = 8.0;
+            state.day++;
+            const nextSeason = getSeasonForDay(state.day);
+            if (nextSeason !== state.season) {
+                applySeasonVisuals(nextSeason);
+                addLog(`Season changed to ${nextSeason.toUpperCase()} on Day ${state.day}!`, nextSeason === 'winter' ? 'warn' : 'good');
+            }
+        }
+        state.player.health = Math.min(100, state.player.health + 35);
+        state.player.stamina = 100;
+        addLog("Rested for 4 hours. Health & stamina restored.", "good");
+        saveGameProgress(true);
+    });
+
+    document.getElementById('btn-save').addEventListener('click', () => {
+        saveGameProgress(false);
+    });
+
+    document.getElementById('btn-respawn-bed').addEventListener('click', respawnAtBed);
+    document.getElementById('btn-start').addEventListener('click', () => startNewGame(false));
+    document.getElementById('btn-restart').addEventListener('click', () => startNewGame(true));
+}
+
+function restoreSavedStructures(savedStructs) {
+    if (!Array.isArray(savedStructs)) return;
+    for (let item of savedStructs) {
+        const bp = BUILD_PIECES.find(p => p.id === item.type);
+        if (!bp) continue;
+        const built = createStructureMesh(bp.id, false);
+        built.group.position.set(item.x, item.y, item.z);
+        built.group.rotation.y = item.rot || 0;
+        structureGroup.add(built.group);
+
+        const structObj = {
+            type: bp.id,
+            name: bp.name,
+            reqs: bp.reqs,
+            mesh: built.group,
+            fireMesh: built.fireMesh,
+            pointLight: built.pointLight,
+            doorPivot: built.doorPivot,
+            doorOpen: !!item.doorOpen,
+            x: item.x,
+            y: item.y,
+            z: item.z,
+            rot: item.rot || 0,
+            isFire: !!bp.isFire,
+            fuel: item.fuel || 0,
+            blocksMovement: !!bp.blocksMovement,
+            spikes: !!bp.spikes,
+            storage: item.storage ? JSON.parse(item.storage) : (bp.id === 'chest' ? new Array(16).fill(null) : null)
+        };
+        built.group.traverse(c => { c.userData.structure = structObj; });
+        state.structures.push(structObj);
+    }
+}
+
+function startNewGame(forceFresh = false) {
+    sound.init();
+
+    const useSave = !forceFresh && savedGameData;
+
+    state.day = useSave ? (savedGameData.day || 1) : 1;
+    state.season = getSeasonForDay(state.day);
+    state.timeOfDay = useSave ? (savedGameData.timeOfDay ?? 8.0) : 8.0;
+    state.weather = useSave ? (savedGameData.weather || 'clear') : 'clear';
+    state.weatherTimer = 95;
+    state.gameOver = false;
+    state.running = true;
+
+    toggleBuildMode(false);
+    closeStorageModal();
+    stopFishing();
+    setRifleScoped(false);
+    generateWorld();
+    applySeasonVisuals(state.season);
+
+    if (useSave) {
+        const pos = savedGameData.playerPos || { x: 0, y: getTerrainHeight(0, 0), z: 0 };
+        state.player.pos.set(pos.x, pos.y, pos.z);
+        state.player.vel.set(0, 0, 0);
+        state.player.yaw = savedGameData.playerYaw || 0;
+        state.player.pitch = savedGameData.playerPitch || 0;
+        state.player.health = savedGameData.health ?? 100;
+        state.player.stamina = savedGameData.stamina ?? 100;
+        state.player.bodyTemp = savedGameData.bodyTemp ?? 37.0;
+        state.player.wetness = savedGameData.wetness ?? 0;
+        state.player.selectedSlot = savedGameData.selectedSlot ?? 0;
+        state.player.inventory = savedGameData.inventory ? JSON.parse(savedGameData.inventory) : new Array(8).fill(null);
+        state.spawnPoint = savedGameData.spawnPoint || null;
+        state.stats = savedGameData.stats || { gathered: 0, crafted: 0, hunted: 0 };
+
+        if (savedGameData.structures) {
+            restoreSavedStructures(JSON.parse(savedGameData.structures));
+        }
+        if (savedGameData.vehicles) {
+            JSON.parse(savedGameData.vehicles).forEach(v => spawnATV(v.x, v.y, v.z, v.yaw));
+        }
+
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('gameover-screen').style.display = 'none';
+        document.getElementById('log-panel').innerHTML = '';
+        addLog(`Welcome back! Loaded Day ${state.day} progress.`, "good");
+    } else {
+        savedGameData = null;
+        state.spawnPoint = null;
+        state.player.pos.set(0, getTerrainHeight(0, 0), 0);
+        state.player.vel.set(0, 0, 0);
+        state.player.yaw = 0;
+        state.player.pitch = 0;
+        state.player.health = 100;
+        state.player.stamina = 100;
+        state.player.bodyTemp = 37.0;
+        state.player.wetness = 0;
+        state.player.selectedSlot = 0;
+        state.player.inventory = new Array(8).fill(null);
+
+        state.stats = { gathered: 0, crafted: 0, hunted: 0 };
+        // Starting wilderness kit (including starter Hunting Rifle, Fishing Rod, Ammo, and a parked 4x4 ATV)
+        addItem('rifle', 1);
+        addItem('ammo', 12);
+        addItem('fishing_rod', 1);
+        addItem('berries', 3);
+        addItem('wood', 8);
+        addItem('stone', 4);
+        addItem('fiber', 4);
+
+        const atvX = 5.5;
+        const atvZ = -5.5;
+        spawnATV(atvX, getTerrainHeight(atvX, atvZ), atvZ, 0.4);
+
+        document.getElementById('start-screen').style.display = 'none';
+        document.getElementById('gameover-screen').style.display = 'none';
+        document.getElementById('log-panel').innerHTML = '';
+        addLog("You wake with a Hunting Rifle and a 4x4 ATV parked nearby! Aim & Click to shoot, [E] to ride.", "good");
+        saveGameProgress(true);
+    }
+
+    renderInventory();
+    updateHUD();
+
+    if (renderer?.domElement) {
+        renderer.domElement.requestPointerLock();
+    }
+}
+
+let lastFrameTime = performance.now();
+function animateLoop(now) {
+    requestAnimationFrame(animateLoop);
+    const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
+    lastFrameTime = now;
+
+    if (state.running && !state.gameOver) {
+        updateSimulation(dt);
+    }
+    if (renderer && scene && camera) {
+        renderer.render(scene, camera);
+    }
+}
+
+window.onload = async function () {
+    initThree();
+    setupEvents();
+    await initCloudStorage();
+    animateLoop(performance.now());
+};
+</script>
+</body>
+</html>

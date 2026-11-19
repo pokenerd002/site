@@ -1,0 +1,2908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wilderness Hunter & Angler 3D</title>
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --panel-bg: rgba(11, 18, 30, 0.86);
+      --panel-border: rgba(255, 255, 255, 0.14);
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-sky: #38bdf8;
+      --accent-red: #ef4444;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #game-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas#game-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Glass Panels & HUD */
+    .glass {
+      background: var(--panel-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+
+    .hud-top {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-left-col, .hud-right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hud-right-col { align-items: flex-end; }
+
+    .stat-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      padding: 8px 13px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .pill-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      display: block;
+    }
+
+    .pill-val {
+      font-size: 15px;
+      font-weight: 800;
+    }
+
+    .hp-bar-wrap {
+      width: 110px;
+      height: 8px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-top: 3px;
+    }
+
+    .hp-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: linear-gradient(90deg, #ef4444, #22c55e);
+      transition: width 0.18s ease;
+    }
+
+    /* Crosshair & Scope */
+    #crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 24px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 8;
+    }
+
+    #crosshair::before, #crosshair::after {
+      content: "";
+      position: absolute;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 0 4px rgba(0,0,0,0.8);
+    }
+
+    #crosshair::before { left: 11px; top: 2px; width: 2px; height: 20px; }
+    #crosshair::after { top: 11px; left: 2px; height: 2px; width: 20px; }
+
+    #hitmarker {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 26px;
+      height: 26px;
+      transform: translate(-50%, -50%) rotate(45deg);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.08s ease;
+      z-index: 9;
+    }
+
+    #hitmarker::before, #hitmarker::after {
+      content: "";
+      position: absolute;
+      background: #ef4444;
+    }
+    #hitmarker::before { left: 12px; top: 0; width: 2px; height: 26px; }
+    #hitmarker::after { top: 12px; left: 0; height: 2px; width: 26px; }
+
+    #scope-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 34%, rgba(0, 0, 0, 0.94) 52%);
+      z-index: 7;
+    }
+
+    #scope-overlay::before, #scope-overlay::after {
+      content: "";
+      position: absolute;
+      background: rgba(255, 255, 255, 0.28);
+    }
+    #scope-overlay::before { left: 50%; top: 15%; width: 1px; height: 70%; }
+    #scope-overlay::after { top: 50%; left: 15%; height: 1px; width: 70%; }
+
+    #damage-vignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at center, transparent 48%, rgba(220, 38, 38, 0.72) 100%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 6;
+    }
+
+    /* Center Prompt & Floating Banner */
+    #prompt-box {
+      position: absolute;
+      bottom: 108px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 18px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      z-index: 12;
+      pointer-events: none;
+    }
+
+    .key-badge {
+      background: var(--accent-amber);
+      color: #090d16;
+      font-weight: 900;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    #float-msg {
+      position: absolute;
+      top: 105px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 9px 18px;
+      border-radius: 999px;
+      background: rgba(11, 18, 30, 0.92);
+      border: 1px solid rgba(255,255,255,0.18);
+      font-size: 14px;
+      font-weight: 800;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 15;
+    }
+
+    /* Fishing Mini-Game Bar */
+    #fishing-panel {
+      position: absolute;
+      bottom: 155px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 320px;
+      padding: 14px 16px;
+      z-index: 14;
+      pointer-events: none;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 11px;
+      background: rgba(255,255,255,0.12);
+      border-radius: 99px;
+      overflow: hidden;
+      margin: 5px 0 10px;
+    }
+
+    .bar-fill-catch {
+      height: 100%;
+      width: 30%;
+      background: linear-gradient(90deg, #0ea5e9, #10b981);
+    }
+
+    .bar-fill-tension {
+      height: 100%;
+      width: 20%;
+      background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+    }
+
+    /* Bottom Weapon / Rod Hotbar & Controls */
+    .hud-bottom {
+      position: absolute;
+      bottom: 14px;
+      left: 14px;
+      right: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 12px;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hotbar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .slot {
+      padding: 7px 11px;
+      border-radius: 10px;
+      background: rgba(11, 18, 30, 0.8);
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+    }
+
+    .slot.owned { color: var(--text-main); }
+    .slot.active {
+      border-color: var(--accent-amber);
+      background: rgba(245, 158, 11, 0.22);
+      color: #fde68a;
+    }
+
+    .weapon-card {
+      padding: 10px 15px;
+      text-align: right;
+      min-width: 205px;
+    }
+
+    /* Modals & Menus */
+    .overlay-screen {
+      position: absolute;
+      inset: 0;
+      background: rgba(6, 10, 18, 0.84);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 30;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 780px;
+      max-height: 88vh;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .shop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(225px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .shop-item {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 9px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.1s ease, filter 0.15s ease;
+    }
+
+    .btn:hover:not(:disabled) { filter: brightness(1.12); transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--accent-emerald); color: #04130d; }
+    .btn-amber { background: var(--accent-amber); color: #160e02; }
+    .btn-sky { background: var(--accent-sky); color: #04121d; }
+    .btn-ghost { background: rgba(255,255,255,0.12); color: var(--text-main); }
+
+    .hidden { display: none !important; }
+
+    /* Mobile / Touch Look & Fire Controls */
+    .touch-controls {
+      position: absolute;
+      bottom: 72px;
+      right: 16px;
+      display: flex;
+      gap: 8px;
+      z-index: 12;
+    }
+
+    .touch-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255,255,255,0.22);
+      color: #fff;
+      font-weight: 800;
+      font-size: 12px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="damage-vignette"></div>
+    <div id="scope-overlay" class="hidden"></div>
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+
+    <!-- Top HUD -->
+    <div class="hud-top">
+      <div class="hud-left-col">
+        <div class="stat-row">
+          <div class="pill glass">
+            <div>
+              <span class="pill-label">Health</span>
+              <span id="hud-hp" class="pill-val">100 / 100</span>
+              <div class="hp-bar-wrap"><div id="hud-hp-bar" class="hp-bar-fill"></div></div>
+            </div>
+          </div>
+          <div class="pill glass">
+            <div>
+              <span class="pill-label">Cash</span>
+              <span id="hud-cash" class="pill-val" style="color:#34d399;">$150</span>
+            </div>
+          </div>
+          <div class="pill glass">
+            <div>
+              <span class="pill-label">Game Bag</span>
+              <span id="hud-bag" class="pill-val">0 / 6</span>
+            </div>
+          </div>
+          <div class="pill glass">
+            <div>
+              <span class="pill-label">Corn Bait</span>
+              <span id="hud-bait" class="pill-val" style="color:#fbbf24;">1 Bag</span>
+            </div>
+          </div>
+        </div>
+        <div class="stat-row">
+          <div class="pill glass">
+            <div>
+              <span class="pill-label">Region / Status</span>
+              <span id="hud-biome" class="pill-val" style="color:#38bdf8;">Base Camp</span>
+            </div>
+          </div>
+          <div class="pill glass">
+            <div>
+              <span class="pill-label">Time & Lamp [T / L]</span>
+              <span id="hud-time" class="pill-val">08:00 AM • Lamp OFF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hud-right-col">
+        <div class="pill glass" style="font-size:12px; line-height:1.45; max-width:300px;">
+          <div>
+            <strong style="color:#fbbf24;">Compass & Guide:</strong><br/>
+            NW: Forest • NE: Arctic • SW: Jungle • SE: Savanna<br/>
+            <span style="color:#94a3b8;">WASD Move/Drive • Mouse Look • Click Fire/Cast • R-Click/Z Scope • E Interact</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="float-msg"></div>
+
+    <!-- Fishing Reeling UI -->
+    <div id="fishing-panel" class="glass hidden">
+      <div style="display:flex; justify-content:space-between; font-size:13px; font-weight:800;">
+        <span id="fish-status-title" style="color:#38bdf8;">Bobber in Water...</span>
+        <span id="fish-bite-alert" style="color:#fbbf24;"></span>
+      </div>
+      <div style="font-size:11px; color:#94a3b8; margin-top:6px;">Catch Progress (Hold Left-Click to Reel)</div>
+      <div class="bar-track"><div id="fish-catch-bar" class="bar-fill-catch"></div></div>
+      <div style="font-size:11px; color:#94a3b8;">Line Tension (Release if Red!)</div>
+      <div class="bar-track" style="margin-bottom:2px;"><div id="fish-tension-bar" class="bar-fill-tension"></div></div>
+    </div>
+
+    <!-- Context Prompt -->
+    <div id="prompt-box" class="glass hidden">
+      <span id="prompt-key" class="key-badge">E</span>
+      <span id="prompt-text">Interact</span>
+    </div>
+
+    <!-- Quick Touch Action Buttons -->
+    <div class="touch-controls">
+      <button class="touch-btn" id="btn-interact" title="Interact [E]">E</button>
+      <button class="touch-btn" id="btn-call" title="Duck Call [C]">CALL</button>
+      <button class="touch-btn" id="btn-lamp" title="Headlamp [L]">LAMP</button>
+      <button class="touch-btn" id="btn-scope" title="Scope [Z]">AIM</button>
+      <button class="touch-btn" id="btn-reload" title="Reload [R]">REL</button>
+    </div>
+
+    <!-- Bottom Hotbar & Active Gear -->
+    <div class="hud-bottom">
+      <div class="hotbar" id="hotbar"></div>
+      <div class="weapon-card glass">
+        <div id="hud-weapon-name" style="font-size:15px; font-weight:800; color:#fbbf24;">Varmint .22 Bolt Rifle</div>
+        <div id="hud-weapon-sub" style="font-size:13px; color:#cbd5e1; margin-top:2px;">Ammo: 6 / 6 • DMG: 45</div>
+      </div>
+    </div>
+
+    <!-- Start / Title Screen -->
+    <div id="start-screen" class="overlay-screen">
+      <div class="modal-box glass" style="max-width:620px; text-align:center;">
+        <div style="font-size:12px; font-weight:800; letter-spacing:0.14em; color:#34d399; text-transform:uppercase;">4-Biome Open World Expedition</div>
+        <h1 style="font-size:32px; font-weight:900; margin:8px 0 10px;">Wilderness Hunter & Angler 3D</h1>
+        <p style="color:#cbd5e1; font-size:14px; line-height:1.6; margin-bottom:18px;">
+          Explore a massive 4-biome wilderness—<strong>Temperate Forest</strong>, <strong>Arctic Forest</strong>, <strong>Tropical Jungle</strong>, and <strong>Golden Savanna</strong>—on foot or in your <strong>Polaris Ranger 1000 UTV</strong>.
+          Hunt 16 land animals &amp; 4 waterfowl species from elevated <strong>Hunting Blinds</strong>, <strong>Deer Feeders</strong>, and shoreline <strong>Duck Blinds</strong>, cast into biome water holes for 8 unique fish, and walk inside the 4 <strong>Base Camp</strong> buildings to sell your harvest and buy firearms, rods, and upgrades.
+        </p>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; text-align:left; font-size:12px; background:rgba(255,255,255,0.04); padding:12px; border-radius:10px; margin-bottom:18px;">
+          <div><strong>WASD / Space / Shift:</strong> Move, Drive, Jump, Sprint</div>
+          <div><strong>Mouse / Drag / Arrows:</strong> Look Around</div>
+          <div><strong>Left-Click:</strong> Shoot / Cast / Blow Duck Call</div>
+          <div><strong>Right-Click / Z:</strong> Scope Zoom</div>
+          <div><strong>1–5:</strong> Guns • <strong>6:</strong> Rod • <strong>7 / C:</strong> Duck Call</div>
+          <div><strong>E:</strong> Drive UTV / Harvest / Blind / Shop • <strong>L:</strong> Lamp</div>
+        </div>
+        <button id="btn-start" class="btn btn-primary" style="font-size:16px; padding:12px 28px;">Enter the Wilderness</button>
+      </div>
+    </div>
+
+    <!-- Building / Shop Modal -->
+    <div id="shop-modal" class="overlay-screen hidden">
+      <div class="modal-box glass">
+        <div class="modal-header">
+          <div>
+            <div id="modal-subtitle" style="font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:#38bdf8; font-weight:800;">Base Camp Interior</div>
+            <h2 id="modal-title" style="font-size:24px; font-weight:900;">Trading Post</h2>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="text-align:right;">
+              <div style="font-size:11px; color:#94a3b8;">Available Cash</div>
+              <div id="modal-cash" style="font-size:18px; font-weight:900; color:#34d399;">$150</div>
+            </div>
+            <button id="btn-close-modal" class="btn btn-ghost">Resume [ESC]</button>
+          </div>
+        </div>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    'use strict';
+
+    // =========================================================================
+    // 1. CATALOGS: BIOMES, ANIMALS, WATERFOWL, FISH, GUNS, RODS & BUILDINGS
+    // =========================================================================
+    const BIOMES = {
+      CAMP:    { name: 'Base Camp Outpost', sky: [0.46, 0.72, 0.94], fog: [0.68, 0.82, 0.92] },
+      FOREST:  { name: 'Temperate Forest (NW)', sky: [0.42, 0.70, 0.92], fog: [0.58, 0.76, 0.84] },
+      ARCTIC:  { name: 'Arctic Forest (NE)', sky: [0.62, 0.80, 0.96], fog: [0.82, 0.90, 0.98] },
+      JUNGLE:  { name: 'Tropical Jungle (SW)', sky: [0.36, 0.68, 0.78], fog: [0.46, 0.72, 0.68] },
+      SAVANNA: { name: 'Golden Savanna (SE)', sky: [0.58, 0.76, 0.90], fog: [0.86, 0.78, 0.60] }
+    };
+
+    const ANIMALS = {
+      BOAR:          { id: 'BOAR',          name: 'Wild Boar',        biome: 'FOREST',  hp: 85,  val: 95,  spd: 5.8, run: 14.5, sz: 0.95, predator: false, atk: 0,  rgb: [0.36, 0.25, 0.18], acc: [0.85, 0.80, 0.70] },
+      DEER:          { id: 'DEER',          name: 'Forest Stag',      biome: 'FOREST',  hp: 95,  val: 135, spd: 6.4, run: 16.5, sz: 1.18, predator: false, atk: 0,  rgb: [0.64, 0.42, 0.23], acc: [0.82, 0.72, 0.55] },
+      TIMBER_WOLF:   { id: 'TIMBER_WOLF',   name: 'Timber Wolf',      biome: 'FOREST',  hp: 110, val: 165, spd: 7.2, run: 16.2, sz: 1.02, predator: true,  atk: 18, rgb: [0.42, 0.44, 0.48], acc: [0.75, 0.77, 0.80] },
+      GRIZZLY:       { id: 'GRIZZLY',       name: 'Grizzly Bear',     biome: 'FOREST',  hp: 210, val: 330, spd: 5.6, run: 15.2, sz: 1.48, predator: true,  atk: 34, rgb: [0.34, 0.21, 0.12], acc: [0.52, 0.36, 0.22] },
+      ARCTIC_FOX:    { id: 'ARCTIC_FOX',    name: 'Arctic Fox',       biome: 'ARCTIC',  hp: 65,  val: 115, spd: 7.0, run: 16.0, sz: 0.82, predator: false, atk: 0,  rgb: [0.94, 0.96, 1.00], acc: [0.78, 0.84, 0.92] },
+      CARIBOU:       { id: 'CARIBOU',       name: 'Tundra Caribou',   biome: 'ARCTIC',  hp: 120, val: 160, spd: 6.2, run: 16.0, sz: 1.25, predator: false, atk: 0,  rgb: [0.56, 0.50, 0.44], acc: [0.90, 0.88, 0.84] },
+      SNOW_WOLF:     { id: 'SNOW_WOLF',     name: 'Arctic Dire Wolf', biome: 'ARCTIC',  hp: 125, val: 195, spd: 7.5, run: 16.8, sz: 1.08, predator: true,  atk: 22, rgb: [0.90, 0.93, 0.98], acc: [0.65, 0.72, 0.82] },
+      POLAR_BEAR:    { id: 'POLAR_BEAR',    name: 'Polar Bear',       biome: 'ARCTIC',  hp: 230, val: 360, spd: 5.8, run: 15.6, sz: 1.54, predator: true,  atk: 38, rgb: [0.96, 0.97, 0.99], acc: [0.18, 0.20, 0.24] },
+      TAPIR:         { id: 'TAPIR',         name: 'Jungle Tapir',     biome: 'JUNGLE',  hp: 95,  val: 125, spd: 5.6, run: 14.0, sz: 1.02, predator: false, atk: 0,  rgb: [0.24, 0.22, 0.24], acc: [0.86, 0.86, 0.88] },
+      CAPYBARA:      { id: 'CAPYBARA',      name: 'Giant Capybara',   biome: 'JUNGLE',  hp: 80,  val: 110, spd: 5.2, run: 13.5, sz: 0.92, predator: false, atk: 0,  rgb: [0.54, 0.38, 0.22], acc: [0.36, 0.24, 0.14] },
+      JAGUAR:        { id: 'JAGUAR',        name: 'Shadow Jaguar',    biome: 'JUNGLE',  hp: 145, val: 260, spd: 7.6, run: 17.4, sz: 1.16, predator: true,  atk: 28, rgb: [0.84, 0.60, 0.20], acc: [0.16, 0.12, 0.08] },
+      BLACK_PANTHER: { id: 'BLACK_PANTHER', name: 'Black Panther',    biome: 'JUNGLE',  hp: 155, val: 290, spd: 7.8, run: 17.8, sz: 1.18, predator: true,  atk: 30, rgb: [0.14, 0.14, 0.18], acc: [0.92, 0.76, 0.18] },
+      ZEBRA:         { id: 'ZEBRA',         name: 'Plains Zebra',     biome: 'SAVANNA', hp: 105, val: 140, spd: 6.6, run: 16.5, sz: 1.22, predator: false, atk: 0,  rgb: [0.96, 0.96, 0.98], acc: [0.10, 0.10, 0.12] },
+      WILDEBEEST:    { id: 'WILDEBEEST',    name: 'Blue Wildebeest',  biome: 'SAVANNA', hp: 125, val: 160, spd: 6.3, run: 15.8, sz: 1.26, predator: false, atk: 0,  rgb: [0.32, 0.34, 0.38], acc: [0.18, 0.16, 0.15] },
+      HYENA:         { id: 'HYENA',         name: 'Spotted Hyena',    biome: 'SAVANNA', hp: 115, val: 175, spd: 7.1, run: 16.0, sz: 1.05, predator: true,  atk: 20, rgb: [0.58, 0.46, 0.30], acc: [0.22, 0.16, 0.11] },
+      LION:          { id: 'LION',          name: 'Savanna Lion',     biome: 'SAVANNA', hp: 185, val: 340, spd: 6.8, run: 16.8, sz: 1.38, predator: true,  atk: 34, rgb: [0.83, 0.61, 0.26], acc: [0.47, 0.21, 0.06] },
+      MALLARD_DUCK:  { id: 'MALLARD_DUCK',  name: 'Mallard Duck',     biome: 'FOREST',  hp: 30,  val: 55,  spd: 9.5, run: 16.5, sz: 0.65, predator: false, atk: 0,  isBird: true, rgb: [0.45, 0.35, 0.26], acc: [0.10, 0.48, 0.24] },
+      EIDER_DUCK:    { id: 'EIDER_DUCK',    name: 'Arctic Eider Duck',biome: 'ARCTIC',  hp: 35,  val: 75,  spd: 10.0,run: 17.5, sz: 0.68, predator: false, atk: 0,  isBird: true, rgb: [0.95, 0.97, 1.00], acc: [0.12, 0.14, 0.18] },
+      WOOD_DUCK:     { id: 'WOOD_DUCK',     name: 'Mandarin Duck',    biome: 'JUNGLE',  hp: 30,  val: 85,  spd: 9.8, run: 17.0, sz: 0.64, predator: false, atk: 0,  isBird: true, rgb: [0.76, 0.38, 0.12], acc: [0.12, 0.56, 0.48] },
+      NILE_GOOSE:    { id: 'NILE_GOOSE',    name: 'Egyptian Goose',   biome: 'SAVANNA', hp: 40,  val: 80,  spd: 9.6, run: 16.8, sz: 0.72, predator: false, atk: 0,  isBird: true, rgb: [0.68, 0.54, 0.38], acc: [0.42, 0.22, 0.14] }
+    };
+
+    const FISH_SPECIES = {
+      FOREST:  [
+        { id: 'BROOK_TROUT', name: 'Brook Trout', val: 45, diff: 0.85, col: [0.35, 0.62, 0.48] },
+        { id: 'KING_SALMON', name: 'King Salmon', val: 85, diff: 1.15, col: [0.85, 0.36, 0.34] }
+      ],
+      ARCTIC: [
+        { id: 'ARCTIC_CHAR', name: 'Arctic Char', val: 70, diff: 1.05, col: [0.90, 0.42, 0.26] },
+        { id: 'HALIBUT',     name: 'Greenland Halibut', val: 120, diff: 1.35, col: [0.58, 0.66, 0.74] }
+      ],
+      JUNGLE: [
+        { id: 'PEACOCK_BASS', name: 'Peacock Bass', val: 80, diff: 1.10, col: [0.86, 0.72, 0.18] },
+        { id: 'TIGERFISH',    name: 'Goliath Tigerfish', val: 145, diff: 1.50, col: [0.75, 0.78, 0.82] }
+      ],
+      SAVANNA: [
+        { id: 'NILE_TILAPIA', name: 'Nile Tilapia', val: 65, diff: 0.95, col: [0.64, 0.68, 0.58] },
+        { id: 'VUNDU_CATFISH',name: 'Giant Vundu Catfish', val: 135, diff: 1.40, col: [0.36, 0.32, 0.28] }
+      ]
+    };
+
+    const TROPHY_LIST = [
+      { id: 'BOAR', name: 'Wild Boar' }, { id: 'DEER', name: 'Forest Stag' },
+      { id: 'TIMBER_WOLF', name: 'Timber Wolf' }, { id: 'GRIZZLY', name: 'Grizzly Bear' },
+      { id: 'ARCTIC_FOX', name: 'Arctic Fox' }, { id: 'CARIBOU', name: 'Tundra Caribou' },
+      { id: 'SNOW_WOLF', name: 'Arctic Dire Wolf' }, { id: 'POLAR_BEAR', name: 'Polar Bear' },
+      { id: 'TAPIR', name: 'Jungle Tapir' }, { id: 'CAPYBARA', name: 'Giant Capybara' },
+      { id: 'JAGUAR', name: 'Shadow Jaguar' }, { id: 'BLACK_PANTHER', name: 'Black Panther' },
+      { id: 'ZEBRA', name: 'Plains Zebra' }, { id: 'WILDEBEEST', name: 'Blue Wildebeest' },
+      { id: 'HYENA', name: 'Spotted Hyena' }, { id: 'LION', name: 'Savanna Lion' },
+      { id: 'MALLARD_DUCK', name: 'Mallard Duck' }, { id: 'EIDER_DUCK', name: 'Arctic Eider' },
+      { id: 'WOOD_DUCK', name: 'Mandarin Duck' }, { id: 'NILE_GOOSE', name: 'Egyptian Goose' }
+    ];
+
+    const GUNS = [
+      { id: 0, slot: '1', name: 'Varmint .22 Bolt',     cost: 0,    dmg: 45,  pellets: 1, spread: 0.004, mag: 6, rate: 0.55, zoom: 2.2, range: 170, col: [0.42, 0.26, 0.14] },
+      { id: 1, slot: '2', name: '12-Gauge Shotgun',     cost: 250,  dmg: 22,  pellets: 8, spread: 0.068, mag: 5, rate: 0.72, zoom: 1.4, range: 72,  col: [0.22, 0.23, 0.26] },
+      { id: 2, slot: '3', name: 'Lever-Action .45-70',  cost: 550,  dmg: 95,  pellets: 1, spread: 0.008, mag: 8, rate: 0.62, zoom: 2.6, range: 195, col: [0.76, 0.58, 0.22] },
+      { id: 3, slot: '4', name: '.300 WinMag Safari',   cost: 1100, dmg: 155, pellets: 1, spread: 0.003, mag: 5, rate: 0.85, zoom: 3.8, range: 250, col: [0.34, 0.24, 0.16] },
+      { id: 4, slot: '5', name: '.50 Cal Longbow',      cost: 2200, dmg: 260, pellets: 1, spread: 0.001, mag: 4, rate: 1.15, zoom: 5.5, range: 320, col: [0.16, 0.20, 0.22] }
+    ];
+
+    const RODS = [
+      { id: 0, name: 'Bamboo Cane Pole',       cost: 0,   power: 1.0, biteSpd: 1.0, col: [0.72, 0.60, 0.30] },
+      { id: 1, name: 'Fiberglass Spin Rod',    cost: 180, power: 1.35,biteSpd: 1.25,col: [0.20, 0.55, 0.82] },
+      { id: 2, name: 'Carbon Baitcaster',      cost: 450, power: 1.75,biteSpd: 1.55,col: [0.22, 0.24, 0.28] },
+      { id: 3, name: 'Master Angler Pro Rig',  cost: 950, power: 2.30,biteSpd: 2.00,col: [0.88, 0.66, 0.20] }
+    ];
+
+    const WATER_HOLES = [
+      { id: 'WH_FOREST',  name: 'Whispering Pine Pond', biome: 'FOREST',  x: -165, z: -165, r: 28, col: [0.12, 0.42, 0.56] },
+      { id: 'WH_ARCTIC',  name: 'Glacier Ice Hole',     biome: 'ARCTIC',  x: 168,  z: -168, r: 26, col: [0.16, 0.52, 0.68] },
+      { id: 'WH_JUNGLE',  name: 'Emerald Lagoon',       biome: 'JUNGLE',  x: -168, z: 168,  r: 30, col: [0.10, 0.48, 0.44] },
+      { id: 'WH_SAVANNA', name: 'Acacia Oasis',         biome: 'SAVANNA', x: 168,  z: 168,  r: 28, col: [0.18, 0.46, 0.52] }
+    ];
+
+    const CAMP_BUILDINGS = [
+      { id: 'TRADING', name: 'Trading Post & Butcher', x: -16, z: 0,   w: 9, d: 11, h: 4.5, doorSide: 'E', wallCol: [0.48, 0.30, 0.16], roofCol: [0.24, 0.16, 0.10], cx: -18.5, cz: 0 },
+      { id: 'ARMORY',  name: 'Frontier Armory',        x: 16,  z: 0,   w: 9, d: 11, h: 4.5, doorSide: 'W', wallCol: [0.34, 0.36, 0.40], roofCol: [0.18, 0.20, 0.24], cx: 18.5,  cz: 0 },
+      { id: 'TACKLE',  name: 'Bait & Tackle Shop',     x: 0,   z: 18,  w: 11,d: 9,  h: 4.3, doorSide: 'N', wallCol: [0.22, 0.42, 0.48], roofCol: [0.14, 0.26, 0.32], cx: 0,     cz: 20.5 },
+      { id: 'LODGE',   name: "Hunter's Trophy Lodge",  x: 0,   z: -18, w: 12,d: 9,  h: 5.0, doorSide: 'S', wallCol: [0.42, 0.24, 0.14], roofCol: [0.20, 0.12, 0.08], cx: 0,     cz: -20.5 }
+    ];
+
+    // =========================================================================
+    // 2. GAME STATE & PLAYER CONTROLLER
+    // =========================================================================
+    const state = {
+      started: false,
+      paused: false,
+      cash: 150,
+      hp: 100,
+      maxHp: 100,
+      bag: [],
+      bagCap: 6,
+      baitBags: 1,
+      ownedGuns: [true, false, false, false, false],
+      ammo: [6, 5, 8, 5, 4],
+      activeSlot: 0, // 0..4 = Guns, 5 = Fishing Rod, 6 = Duck Call
+      ownedRods: [true, false, false, false],
+      equippedRod: 0,
+      kevlarLine: false,
+      deluxeLure: false,
+      dmgMult: 1.0,
+      speedMult: 1.0,
+      lampLevel: 1,
+      lampOn: false,
+      scoped: false,
+      timeOfDay: 8.2, // 0..24 hours
+      recoil: 0,
+      fireCd: 0,
+      callCd: 0,
+      reloadTimer: 0,
+      trophies: {},
+      insideBuilding: null,
+      nearCounter: null,
+      nearLoot: null,
+      nearBlind: null,
+      inBlind: null,
+      nearFeeder: null,
+      nearRanger: false,
+      inRanger: false,
+      fishing: {
+        active: false,
+        hole: null,
+        bx: 0, by: 0, bz: 0,
+        timer: 0,
+        biteTimer: 0,
+        hooked: null,
+        progress: 0.32,
+        tension: 0.18
+      }
+    };
+
+    const player = {
+      x: 0, y: 1.75, z: 4,
+      vx: 0, vy: 0, vz: 0,
+      yaw: 0, pitch: 0,
+      grounded: true,
+      stepDist: 0
+    };
+
+    const ranger = {
+      x: -11, y: 0, z: 11,
+      yaw: -Math.PI * 0.25,
+      speed: 0,
+      steer: 0,
+      wheelSpin: 0,
+      headlights: false,
+      lookOffsetYaw: 0
+    };
+
+    // =========================================================================
+    // 3. PROCEDURAL WEB AUDIO SYNTHESIS
+    // =========================================================================
+    let audioCtx = null;
+    function ensureAudio() {
+      if (!audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) audioCtx = new AC();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    const sfx = {
+      gunshot(gunId) {
+        ensureAudio();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const dur = gunId === 1 ? 0.35 : 0.45;
+        const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * dur, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) {
+          data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * (gunId === 4 ? 0.14 : 0.08)));
+        }
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(gunId === 0 ? 1800 : 1150, now);
+        filter.frequency.exponentialRampToValueAtTime(160, now + dur);
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(gunId === 0 ? 0.35 : 0.65, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        src.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+        src.start(now);
+      },
+      splash() {
+        ensureAudio();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.28, audioCtx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (audioCtx.sampleRate * 0.07));
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        const f = audioCtx.createBiquadFilter();
+        f.type = 'bandpass'; f.frequency.value = 650;
+        const g = audioCtx.createGain();
+        g.gain.setValueAtTime(0.28, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+        src.connect(f); f.connect(g); g.connect(audioCtx.destination);
+        src.start(now);
+      },
+      tone(freq, dur = 0.15, type = 'triangle', vol = 0.22) {
+        ensureAudio();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        g.gain.setValueAtTime(vol, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+        osc.connect(g); g.connect(audioCtx.destination);
+        osc.start(now); osc.stop(now + dur);
+      },
+      step(inWater, indoor) {
+        this.tone(inWater ? 260 : (indoor ? 130 : 95), 0.06, 'sine', 0.08);
+      },
+      duckCall() {
+        ensureAudio();
+        if (!audioCtx) return;
+        const now = audioCtx.currentTime;
+        // 3-note realistic Mallard hen hail/feeding cadence ("Kaaack - kaack - kack")
+        const notes = [
+          { t: 0.00, dur: 0.24, f0: 540, f1: 310, vol: 0.28 },
+          { t: 0.28, dur: 0.19, f0: 510, f1: 295, vol: 0.25 },
+          { t: 0.52, dur: 0.14, f0: 470, f1: 275, vol: 0.22 }
+        ];
+        notes.forEach(n => {
+          const osc = audioCtx.createOscillator();
+          const filter = audioCtx.createBiquadFilter();
+          const gain = audioCtx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(n.f0, now + n.t);
+          osc.frequency.exponentialRampToValueAtTime(n.f1, now + n.t + n.dur);
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(920, now + n.t);
+          filter.Q.value = 3.2;
+          gain.gain.setValueAtTime(0.001, now + n.t);
+          gain.gain.linearRampToValueAtTime(n.vol, now + n.t + 0.025);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + n.t + n.dur);
+          osc.connect(filter);
+          filter.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now + n.t);
+          osc.stop(now + n.t + n.dur + 0.01);
+        });
+      }
+    };
+
+    // =========================================================================
+    // 4. TERRAIN HEIGHT, BIOME DETECTION & COLORING
+    // =========================================================================
+    function getBiomeAt(x, z) {
+      if (Math.hypot(x, z) < 30) return 'CAMP';
+      if (x < 0 && z < 0) return 'FOREST';
+      if (x >= 0 && z < 0) return 'ARCTIC';
+      if (x < 0 && z >= 0) return 'JUNGLE';
+      return 'SAVANNA';
+    }
+
+    function getTerrainHeight(x, z) {
+      const distCamp = Math.hypot(x, z);
+      const campFlat = Math.max(0, Math.min(1, (distCamp - 28) / 24));
+
+      let h = (Math.sin(x * 0.017) * Math.cos(z * 0.017) * 5.2 +
+               Math.sin(x * 0.041 + z * 0.029) * 2.1 +
+               Math.cos(x * 0.009 - z * 0.012) * 3.8) * campFlat;
+
+      // Carve realistic recessed water hole basins
+      for (const wh of WATER_HOLES) {
+        const d = Math.hypot(x - wh.x, z - wh.z);
+        if (d < wh.r + 12) {
+          const t = Math.max(0, Math.min(1, (d - (wh.r - 4)) / 16));
+          const basinDepth = -2.4 * (1 - t * t * (3 - 2 * t));
+          h = h * t + basinDepth;
+        }
+      }
+      return h;
+    }
+
+    function getTerrainColor(x, z, y) {
+      const b = getBiomeAt(x, z);
+      // Trails radiating from Base Camp
+      const onTrail = (Math.abs(x) < 3.4 && Math.abs(z) < 400) ||
+                      (Math.abs(z) < 3.4 && Math.abs(x) < 400) ||
+                      (Math.abs(Math.abs(x) - Math.abs(z)) < 3.5 && Math.hypot(x, z) < 280);
+      if (Math.hypot(x, z) < 31 || onTrail) return [0.54, 0.44, 0.30];
+      if (y < -0.55) return [0.46, 0.40, 0.28]; // Sandy shoreline/basin bed
+
+      if (b === 'FOREST')  return [0.20, 0.44, 0.18];
+      if (b === 'ARCTIC')  return [0.88, 0.93, 0.98];
+      if (b === 'JUNGLE')  return [0.13, 0.38, 0.16];
+      return [0.68, 0.56, 0.24];
+    }
+
+    // =========================================================================
+    // 5. WORLD ENTITIES: BUILDINGS, BLINDS, FEEDERS, PROPS & ANIMALS
+    // =========================================================================
+    const wallColliders = [];
+    const staticBoxes = [];
+    const staticCones = [];
+    const staticCyls = [];
+    const huntingBlinds = [];
+    const deerFeeders = [];
+    const duckBlinds = [];
+    const animals = [];
+    const underwaterFish = [];
+
+    function addWallBox(cx, cy, cz, sx, sy, sz, col, emissive = 0, solid = true) {
+      staticBoxes.push({ x: cx, y: cy, z: cz, sx, sy, sz, col, emissive });
+      if (solid) {
+        wallColliders.push({
+          minX: cx - sx * 0.5 - 0.35, maxX: cx + sx * 0.5 + 0.35,
+          minZ: cz - sz * 0.5 - 0.35, maxZ: cz + sz * 0.5 + 0.35
+        });
+      }
+    }
+
+    function buildCampAndStructures() {
+      // 1. Walk-In Base Camp Buildings with Doorways, Counters & Interiors
+      for (const b of CAMP_BUILDINGS) {
+        const hw = b.w * 0.5, hd = b.d * 0.5, t = 0.42;
+        const doorW = 2.6;
+
+        // Floor & Roof
+        addWallBox(b.x, 0.06, b.z, b.w, 0.12, b.d, [0.32, 0.22, 0.14], 0, false);
+        addWallBox(b.x, b.h + 0.2, b.z, b.w + 0.8, 0.4, b.d + 0.8, b.roofCol, 0, false);
+
+        // Warm Interior Ceiling Lantern
+        addWallBox(b.x, b.h - 0.25, b.z, 0.55, 0.25, 0.55, [1.0, 0.85, 0.45], 0.85, false);
+
+        // Build 4 walls leaving a walk-through doorway on doorSide
+        const buildWallWithDoor = (side) => {
+          const isDoor = b.doorSide === side;
+          if (side === 'N' || side === 'S') {
+            const wz = b.z + (side === 'S' ? hd : -hd);
+            if (!isDoor) {
+              addWallBox(b.x, b.h * 0.5, wz, b.w, b.h, t, b.wallCol);
+            } else {
+              const segW = (b.w - doorW) * 0.5;
+              addWallBox(b.x - (doorW * 0.5 + segW * 0.5), b.h * 0.5, wz, segW, b.h, t, b.wallCol);
+              addWallBox(b.x + (doorW * 0.5 + segW * 0.5), b.h * 0.5, wz, segW, b.h, t, b.wallCol);
+              addWallBox(b.x, b.h - 0.55, wz, doorW, 1.1, t, b.wallCol, 0, false);
+            }
+          } else {
+            const wx = b.x + (side === 'E' ? hw : -hw);
+            if (!isDoor) {
+              addWallBox(wx, b.h * 0.5, b.z, t, b.h, b.d, b.wallCol);
+            } else {
+              const segD = (b.d - doorW) * 0.5;
+              addWallBox(wx, b.h * 0.5, b.z - (doorW * 0.5 + segD * 0.5), t, b.h, segD, b.wallCol);
+              addWallBox(wx, b.h * 0.5, b.z + (doorW * 0.5 + segD * 0.5), t, b.h, segD, b.wallCol);
+              addWallBox(wx, b.h - 0.55, b.z, t, 1.1, doorW, b.wallCol, 0, false);
+            }
+          }
+        };
+        ['N', 'S', 'E', 'W'].forEach(buildWallWithDoor);
+
+        // Interior Counter & Shopkeeper NPC
+        const isNS = (b.doorSide === 'N' || b.doorSide === 'S');
+        addWallBox(b.cx, 0.55, b.cz, isNS ? 4.4 : 1.1, 1.1, isNS ? 1.1 : 4.4, [0.46, 0.28, 0.14], 0, true);
+        // Shopkeeper torso & head behind counter
+        const npcX = b.cx + (b.doorSide === 'E' ? -1.1 : (b.doorSide === 'W' ? 1.1 : 0));
+        const npcZ = b.cz + (b.doorSide === 'N' ? 1.1 : (b.doorSide === 'S' ? -1.1 : 0));
+        addWallBox(npcX, 1.25, npcZ, 0.65, 0.95, 0.45, [0.22, 0.45, 0.32], 0, false);
+        addWallBox(npcX, 1.95, npcZ, 0.42, 0.42, 0.42, [0.88, 0.70, 0.55], 0, false);
+      }
+
+      // Central Campfire & Directional Signpost
+      staticCyls.push({ x: 0, y: 0.25, z: 0, r: 1.35, h: 0.45, col: [0.38, 0.38, 0.40] });
+      addWallBox(0, 0.55, 0, 0.65, 0.65, 0.65, [1.0, 0.48, 0.10], 0.95, false);
+
+      // 2. Elevated Tower Hunting Blinds & Automatic Corn Deer Feeders (2 per biome)
+      const blindSpots = [
+        { biome: 'FOREST',  bx: -95,  bz: -85,  fx: -78,  fz: -108 },
+        { biome: 'FOREST',  bx: -245, bz: -235, fx: -225, fz: -255 },
+        { biome: 'ARCTIC',  bx: 95,   bz: -88,  fx: 78,   fz: -112 },
+        { biome: 'ARCTIC',  bx: 248,  bz: -235, fx: 228,  fz: -255 },
+        { biome: 'JUNGLE',  bx: -95,  bz: 90,   fx: -78,  fz: 114 },
+        { biome: 'JUNGLE',  bx: -248, bz: 240,  fx: -228, fz: 260 },
+        { biome: 'SAVANNA', bx: 95,   bz: 92,   fx: 78,   fz: 116 },
+        { biome: 'SAVANNA', bx: 248,  bz: 242,  fx: 228,  fz: 262 }
+      ];
+
+      blindSpots.forEach((st, idx) => {
+        const by = getTerrainHeight(st.bx, st.bz);
+        const blind = {
+          id: `BLIND_${idx}`,
+          name: `${BIOMES[st.biome].name.split(' ')[0]} Tower Blind #${(idx % 2) + 1}`,
+          biome: st.biome,
+          x: st.bx, y: by, z: st.bz,
+          eyeY: by + 4.55
+        };
+        huntingBlinds.push(blind);
+
+        // 4 Stilts, Elevated Cabin Walls, Shooting Window Gap & Sloped Roof
+        [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]].forEach(([ox, oz]) => {
+          staticCyls.push({ x: st.bx + ox, y: by + 1.7, z: st.bz + oz, r: 0.14, h: 3.4, col: [0.34, 0.22, 0.12] });
+        });
+        // Ladder rails
+        staticCyls.push({ x: st.bx - 0.35, y: by + 1.7, z: st.bz + 1.35, r: 0.06, h: 3.4, col: [0.55, 0.42, 0.24] });
+        staticCyls.push({ x: st.bx + 0.35, y: by + 1.7, z: st.bz + 1.35, r: 0.06, h: 3.4, col: [0.55, 0.42, 0.24] });
+        // Platform Floor & Camo Half-Walls
+        addWallBox(st.bx, by + 3.4, st.bz, 2.8, 0.18, 2.8, [0.36, 0.26, 0.15], 0, false);
+        addWallBox(st.bx, by + 3.95, st.bz - 1.32, 2.8, 0.95, 0.14, [0.24, 0.34, 0.18], 0, false);
+        addWallBox(st.bx, by + 3.95, st.bz + 1.32, 2.8, 0.95, 0.14, [0.24, 0.34, 0.18], 0, false);
+        addWallBox(st.bx - 1.32, by + 3.95, st.bz, 0.14, 0.95, 2.8, [0.24, 0.34, 0.18], 0, false);
+        addWallBox(st.bx + 1.32, by + 3.95, st.bz, 0.14, 0.95, 2.8, [0.24, 0.34, 0.18], 0, false);
+        // Blind Roof
+        addWallBox(st.bx, by + 5.25, st.bz, 3.1, 0.2, 3.1, [0.20, 0.26, 0.16], 0, false);
+
+        // Automatic Corn & Salt Deer Feeder
+        const fy = getTerrainHeight(st.fx, st.fz);
+        const feeder = {
+          id: `FEEDER_${idx}`,
+          name: 'Automatic Corn Feeder',
+          biome: st.biome,
+          x: st.fx, y: fy, z: st.fz,
+          cornTimer: idx % 2 === 0 ? 180 : 0 // Half pre-stocked on start!
+        };
+        deerFeeders.push(feeder);
+
+        // Tripod legs, Galv Drum Hopper, Solar Panel & Corn Pile
+        [[0, -0.75], [-0.65, 0.45], [0.65, 0.45]].forEach(([ox, oz]) => {
+          staticCyls.push({ x: st.fx + ox, y: fy + 1.35, z: st.fz + oz, r: 0.07, h: 2.7, col: [0.32, 0.34, 0.36] });
+        });
+        staticCyls.push({ x: st.fx, y: fy + 2.35, z: st.fz, r: 0.56, h: 1.25, col: [0.58, 0.62, 0.66] });
+        staticCones.push({ x: st.fx, y: fy + 3.15, z: st.fz, r: 0.62, h: 0.4, col: [0.24, 0.36, 0.24] });
+        addWallBox(st.fx, fy + 1.55, st.fz, 0.35, 0.22, 0.35, [0.95, 0.72, 0.12], 0, false);
+        // Golden scattered corn mound at base
+        staticCones.push({ x: st.fx, y: fy + 0.1, z: st.fz, r: 1.25, h: 0.22, col: [0.94, 0.76, 0.16] });
+      });
+
+      // 3. Shoreline Duck Blinds & Floating Mallard Decoys at All 4 Water Holes
+      WATER_HOLES.forEach((wh, idx) => {
+        const dx = wh.x + (wh.x < 0 ? wh.r + 2.2 : -(wh.r + 2.2));
+        const dz = wh.z + 4.0;
+        const dy = getTerrainHeight(dx, dz);
+        duckBlinds.push({
+          id: `DUCK_BLIND_${idx}`,
+          name: `${wh.name} Duck Blind`,
+          biome: wh.biome,
+          x: dx, y: dy, z: dz,
+          eyeY: dy + 1.55
+        });
+
+        // Reed-camo shoreline blind enclosure & wooden bench
+        addWallBox(dx, dy + 0.65, dz - 1.4, 3.2, 1.3, 0.24, [0.46, 0.42, 0.24], 0, false);
+        addWallBox(dx, dy + 0.65, dz + 1.4, 3.2, 1.3, 0.24, [0.46, 0.42, 0.24], 0, false);
+        addWallBox(dx - 1.5, dy + 0.65, dz, 0.24, 1.3, 2.8, [0.46, 0.42, 0.24], 0, false);
+        addWallBox(dx + 1.5, dy + 0.65, dz, 0.24, 1.3, 2.8, [0.46, 0.42, 0.24], 0, false);
+        addWallBox(dx, dy + 0.48, dz, 2.4, 0.14, 0.55, [0.36, 0.24, 0.14], 0, false);
+
+        // Floating Duck Decoys in the water hole
+        for (let k = 0; k < 4; k++) {
+          const ang = (k / 4) * Math.PI * 2 + 0.4;
+          const decX = wh.x + Math.cos(ang) * (wh.r * 0.42);
+          const decZ = wh.z + Math.sin(ang) * (wh.r * 0.42);
+          addWallBox(decX, -0.58, decZ, 0.34, 0.22, 0.52, [0.38, 0.28, 0.18], 0, false);
+          addWallBox(decX, -0.44, decZ + 0.22, 0.18, 0.18, 0.20, [0.10, 0.48, 0.22], 0, false);
+        }
+      });
+    }
+
+    function populateEnvironmentAndAnimals() {
+      let seed = 1337;
+      const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+
+      // Dense Trees & Biome Landmarks across all 4 quadrants (920m x 920m world)
+      for (let i = 0; i < 2100; i++) {
+        const px = (rand() - 0.5) * 860;
+        const pz = (rand() - 0.5) * 860;
+        if (Math.hypot(px, pz) < 35) continue;
+        if (Math.abs(px) < 4.5 || Math.abs(pz) < 4.5) continue;
+        let nearWater = false;
+        for (const wh of WATER_HOLES) {
+          if (Math.hypot(px - wh.x, pz - wh.z) < wh.r + 5) nearWater = true;
+        }
+        if (nearWater) continue;
+
+        const gy = getTerrainHeight(px, pz);
+        const b = getBiomeAt(px, pz);
+        const sc = 0.8 + rand() * 0.9;
+
+        if (b === 'FOREST') {
+          if (rand() < 0.86) {
+            staticCyls.push({ x: px, y: gy + 1.8 * sc, z: pz, r: 0.35 * sc, h: 3.6 * sc, col: [0.34, 0.22, 0.12] });
+            staticCones.push({ x: px, y: gy + 4.8 * sc, z: pz, r: 2.3 * sc, h: 5.2 * sc, col: [0.12, 0.36, 0.14] });
+            staticCones.push({ x: px, y: gy + 7.2 * sc, z: pz, r: 1.7 * sc, h: 4.2 * sc, col: [0.16, 0.44, 0.18] });
+          } else {
+            staticCones.push({ x: px, y: gy + 0.9 * sc, z: pz, r: 1.4 * sc, h: 1.8 * sc, col: [0.46, 0.48, 0.50] });
+          }
+        } else if (b === 'ARCTIC') {
+          if (rand() < 0.84) {
+            staticCyls.push({ x: px, y: gy + 1.6 * sc, z: pz, r: 0.32 * sc, h: 3.2 * sc, col: [0.28, 0.20, 0.15] });
+            staticCones.push({ x: px, y: gy + 4.5 * sc, z: pz, r: 2.1 * sc, h: 4.8 * sc, col: [0.16, 0.34, 0.32] });
+            staticCones.push({ x: px, y: gy + 6.6 * sc, z: pz, r: 1.6 * sc, h: 3.6 * sc, col: [0.90, 0.95, 1.00] });
+          } else {
+            staticCones.push({ x: px, y: gy + 2.4 * sc, z: pz, r: 1.8 * sc, h: 4.8 * sc, col: [0.68, 0.86, 0.98] });
+          }
+        } else if (b === 'JUNGLE') {
+          if (rand() < 0.88) {
+            staticCyls.push({ x: px, y: gy + 2.6 * sc, z: pz, r: 0.42 * sc, h: 5.2 * sc, col: [0.26, 0.20, 0.12] });
+            staticCones.push({ x: px, y: gy + 5.6 * sc, z: pz, r: 3.1 * sc, h: 3.4 * sc, col: [0.08, 0.42, 0.14] });
+            staticCones.push({ x: px, y: gy + 7.4 * sc, z: pz, r: 2.3 * sc, h: 2.8 * sc, col: [0.14, 0.54, 0.20] });
+          } else {
+            addWallBox(px, gy + 1.4 * sc, pz, 1.5 * sc, 2.8 * sc, 1.5 * sc, [0.42, 0.44, 0.38], 0, false);
+          }
+        } else {
+          // Golden Savanna flat-top Acacia trees & termite/mesa rocks
+          if (rand() < 0.78) {
+            staticCyls.push({ x: px, y: gy + 2.2 * sc, z: pz, r: 0.32 * sc, h: 4.4 * sc, col: [0.36, 0.26, 0.16] });
+            staticCyls.push({ x: px, y: gy + 4.5 * sc, z: pz, r: 3.4 * sc, h: 0.85 * sc, col: [0.28, 0.44, 0.16] });
+          } else {
+            staticCones.push({ x: px, y: gy + 1.8 * sc, z: pz, r: 2.2 * sc, h: 3.6 * sc, col: [0.66, 0.38, 0.22] });
+          }
+        }
+      }
+
+      // Shoreline Cattail Reeds & Underwater Fish Silhouettes
+      WATER_HOLES.forEach(wh => {
+        for (let r = 0; r < 18; r++) {
+          const ang = (r / 18) * Math.PI * 2;
+          const rx = wh.x + Math.cos(ang) * (wh.r - 1.5);
+          const rz = wh.z + Math.sin(ang) * (wh.r - 1.5);
+          staticCyls.push({ x: rx, y: -0.2, z: rz, r: 0.12, h: 1.6, col: [0.24, 0.48, 0.18] });
+        }
+        for (let f = 0; f < 6; f++) {
+          underwaterFish.push({
+            wh,
+            angle: (f / 6) * Math.PI * 2,
+            radius: 5 + (f % 3) * 6,
+            speed: 0.35 + (f % 3) * 0.15
+          });
+        }
+      });
+
+      // Spawn Land Animals & Waterfowl Ducks/Geese across the expanded map
+      const spawnPlan = [
+        { key: 'BOAR', count: 7, bx: -195, bz: -165 },
+        { key: 'DEER', count: 8, bx: -185, bz: -235 },
+        { key: 'TIMBER_WOLF', count: 4, bx: -265, bz: -145 },
+        { key: 'GRIZZLY', count: 3, bx: -310, bz: -305 },
+        { key: 'ARCTIC_FOX', count: 7, bx: 180, bz: -175 },
+        { key: 'CARIBOU', count: 8, bx: 235, bz: -210 },
+        { key: 'SNOW_WOLF', count: 4, bx: 275, bz: -165 },
+        { key: 'POLAR_BEAR', count: 3, bx: 315, bz: -305 },
+        { key: 'TAPIR', count: 7, bx: -180, bz: 190 },
+        { key: 'CAPYBARA', count: 7, bx: -210, bz: 235 },
+        { key: 'JAGUAR', count: 4, bx: -270, bz: 185 },
+        { key: 'BLACK_PANTHER', count: 3, bx: -315, bz: 300 },
+        { key: 'ZEBRA', count: 8, bx: 195, bz: 195 },
+        { key: 'WILDEBEEST', count: 7, bx: 245, bz: 225 },
+        { key: 'HYENA', count: 4, bx: 205, bz: 275 },
+        { key: 'LION', count: 3, bx: 320, bz: 305 },
+        { key: 'MALLARD_DUCK', count: 6, bx: -165, bz: -165 },
+        { key: 'EIDER_DUCK',   count: 6, bx: 168,  bz: -168 },
+        { key: 'WOOD_DUCK',    count: 6, bx: -168, bz: 168  },
+        { key: 'NILE_GOOSE',   count: 6, bx: 168,  bz: 168  }
+      ];
+
+      spawnPlan.forEach(sp => {
+        const spec = ANIMALS[sp.key];
+        const homeHole = spec.isBird ? WATER_HOLES.find(w => w.biome === spec.biome) : null;
+        for (let i = 0; i < sp.count; i++) {
+          const ax = spec.isBird ? (sp.bx + (rand() - 0.5) * 38) : (sp.bx + (rand() - 0.5) * 260);
+          const az = spec.isBird ? (sp.bz + (rand() - 0.5) * 38) : (sp.bz + (rand() - 0.5) * 260);
+          const startAir = spec.isBird && (i % 2 === 0);
+          animals.push({
+            species: spec,
+            homeHole,
+            x: ax,
+            y: spec.isBird ? (startAir ? 13 + rand() * 8 : -0.62) : getTerrainHeight(ax, az),
+            z: az,
+            yaw: rand() * Math.PI * 2,
+            hp: spec.hp,
+            maxHp: spec.hp,
+            dead: false,
+            looted: false,
+            aiState: spec.isBird ? (startAir ? 'FLY' : 'SWIM') : 'WANDER',
+            aiTimer: 2 + rand() * 5,
+            legPhase: rand() * 6.28,
+            hitFlash: 0,
+            atkCd: 0
+          });
+        }
+      });
+    }
+
+    // =========================================================================
+    // 6. HARDWARE-ACCELERATED WEBGL 3D ENGINE (WITH 3D CANVAS FALLBACK)
+    // =========================================================================
+    const canvas = document.getElementById('game-canvas');
+    let gl = null;
+    let useWebGL = false;
+    let program = null;
+    const meshes = {};
+    const uniforms = {};
+
+    const Mat4 = {
+      identity() {
+        return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+      },
+      perspective(fov, aspect, near, far) {
+        const f = 1.0 / Math.tan(fov * 0.5);
+        const nf = 1 / (near - far);
+        return new Float32Array([
+          f / aspect, 0, 0, 0,
+          0, f, 0, 0,
+          0, 0, (far + near) * nf, -1,
+          0, 0, (2 * far * near) * nf, 0
+        ]);
+      },
+      viewFPS(px, py, pz, yaw, pitch) {
+        const cy = Math.cos(-yaw), sy = Math.sin(-yaw);
+        const cp = Math.cos(-pitch), sp = Math.sin(-pitch);
+        const r00 = cy, r01 = 0, r02 = -sy;
+        const r10 = sy * sp, r11 = cp, r12 = cy * sp;
+        const r20 = sy * cp, r21 = -sp, r22 = cy * cp;
+        return new Float32Array([
+          r00, r10, r20, 0,
+          r01, r11, r21, 0,
+          r02, r12, r22, 0,
+          -(r00 * px + r01 * py + r02 * pz),
+          -(r10 * px + r11 * py + r12 * pz),
+          -(r20 * px + r21 * py + r22 * pz),
+          1
+        ]);
+      },
+      compose(tx, ty, tz, rx, ry, rz, sx, sy, sz) {
+        const cx = Math.cos(rx), sxr = Math.sin(rx);
+        const cy = Math.cos(ry), syr = Math.sin(ry);
+        const cz = Math.cos(rz), szr = Math.sin(rz);
+        const m00 = (cy * cz + syr * sxr * szr) * sx;
+        const m01 = (cx * szr) * sx;
+        const m02 = (-syr * cz + cy * sxr * szr) * sx;
+        const m10 = (-cy * szr + syr * sxr * cz) * sy;
+        const m11 = (cx * cz) * sy;
+        const m12 = (syr * szr + cy * sxr * cz) * sy;
+        const m20 = (syr * cx) * sz;
+        const m21 = (-sxr) * sz;
+        const m22 = (cy * cx) * sz;
+        return new Float32Array([
+          m00, m01, m02, 0,
+          m10, m11, m12, 0,
+          m20, m21, m22, 0,
+          tx,  ty,  tz,  1
+        ]);
+      }
+    };
+
+    function createMeshBuffers(positions, normals, colors = null) {
+      const posBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+      const normBuf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, normBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(normals), gl.STATIC_DRAW);
+
+      let colBuf = null;
+      if (colors) {
+        colBuf = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
+      }
+      return { posBuf, normBuf, colBuf, count: positions.length / 3 };
+    }
+
+    function buildPrimitiveMeshes() {
+      // Unit Box
+      const bp = [], bn = [];
+      const faces = [
+        [[0,0,1],  [-0.5,-0.5,0.5], [0.5,-0.5,0.5], [0.5,0.5,0.5], [-0.5,0.5,0.5]],
+        [[0,0,-1], [0.5,-0.5,-0.5], [-0.5,-0.5,-0.5], [-0.5,0.5,-0.5], [0.5,0.5,-0.5]],
+        [[1,0,0],  [0.5,-0.5,0.5], [0.5,-0.5,-0.5], [0.5,0.5,-0.5], [0.5,0.5,0.5]],
+        [[-1,0,0], [-0.5,-0.5,-0.5], [-0.5,-0.5,0.5], [-0.5,0.5,0.5], [-0.5,0.5,-0.5]],
+        [[0,1,0],  [-0.5,0.5,0.5], [0.5,0.5,0.5], [0.5,0.5,-0.5], [-0.5,0.5,-0.5]],
+        [[0,-1,0], [-0.5,-0.5,-0.5], [0.5,-0.5,-0.5], [0.5,-0.5,0.5], [-0.5,-0.5,0.5]]
+      ];
+      faces.forEach(([n, a, b, c, d]) => {
+        [a, b, c, a, c, d].forEach(v => { bp.push(...v); bn.push(...n); });
+      });
+      meshes.box = createMeshBuffers(bp, bn);
+
+      // Cylinder & Cone
+      const buildRadial = (isCone) => {
+        const p = [], n = [], segs = 14;
+        for (let i = 0; i < segs; i++) {
+          const a0 = (i / segs) * Math.PI * 2, a1 = ((i + 1) / segs) * Math.PI * 2;
+          const x0 = Math.cos(a0) * 0.5, z0 = Math.sin(a0) * 0.5;
+          const x1 = Math.cos(a1) * 0.5, z1 = Math.sin(a1) * 0.5;
+          const nx = Math.cos((a0 + a1) * 0.5), nz = Math.sin((a0 + a1) * 0.5);
+          if (isCone) {
+            p.push(x0, -0.5, z0, x1, -0.5, z1, 0, 0.5, 0);
+            n.push(nx, 0.4, nz, nx, 0.4, nz, nx, 0.4, nz);
+          } else {
+            p.push(x0, -0.5, z0, x1, -0.5, z1, x1, 0.5, z1, x0, -0.5, z0, x1, 0.5, z1, x0, 0.5, z0);
+            n.push(nx, 0, nz, nx, 0, nz, nx, 0, nz, nx, 0, nz, nx, 0, nz, nx, 0, nz);
+            p.push(0, 0.5, 0, x0, 0.5, z0, x1, 0.5, z1);
+            n.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+          }
+        }
+        return createMeshBuffers(p, n);
+      };
+      meshes.cyl = buildRadial(false);
+      meshes.cone = buildRadial(true);
+
+      // UV Sphere
+      const sp = [], sn = [], lat = 8, lon = 12;
+      for (let i = 0; i < lat; i++) {
+        const t0 = (i / lat) * Math.PI, t1 = ((i + 1) / lat) * Math.PI;
+        for (let j = 0; j < lon; j++) {
+          const p0 = (j / lon) * Math.PI * 2, p1 = ((j + 1) / lon) * Math.PI * 2;
+          const pt = (t, ph) => [Math.sin(t) * Math.cos(ph) * 0.5, Math.cos(t) * 0.5, Math.sin(t) * Math.sin(ph) * 0.5];
+          const a = pt(t0, p0), b = pt(t1, p0), c = pt(t1, p1), d = pt(t0, p1);
+          [a, b, c, a, c, d].forEach(v => { sp.push(...v); sn.push(v[0] * 2, v[1] * 2, v[2] * 2); });
+        }
+      }
+      meshes.sphere = createMeshBuffers(sp, sn);
+
+      // Terrain 128x128 Vertex-Colored Mesh (920m x 920m open world)
+      const tp = [], tn = [], tc = [];
+      const grid = 128, size = 920, step = size / grid, half = size / 2;
+      for (let gx = 0; gx < grid; gx++) {
+        for (let gz = 0; gz < grid; gz++) {
+          const x0 = -half + gx * step, z0 = -half + gz * step;
+          const x1 = x0 + step, z1 = z0 + step;
+          const y00 = getTerrainHeight(x0, z0), y10 = getTerrainHeight(x1, z0);
+          const y11 = getTerrainHeight(x1, z1), y01 = getTerrainHeight(x0, z1);
+          const addTri = (ax, ay, az, bx, by, bz, cx, cy, cz) => {
+            const ux = bx - ax, uy = by - ay, uz = bz - az;
+            const vx = cx - ax, vy = cy - ay, vz = cz - az;
+            let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+            const l = Math.hypot(nx, ny, nz) || 1;
+            nx /= l; ny /= l; nz /= l;
+            [[ax, ay, az], [bx, by, bz], [cx, cy, cz]].forEach(([px, py, pz]) => {
+              tp.push(px, py, pz);
+              tn.push(nx, ny, nz);
+              tc.push(...getTerrainColor(px, pz, py));
+            });
+          };
+          addTri(x0, y00, z0, x0, y01, z1, x1, y11, z1);
+          addTri(x0, y00, z0, x1, y11, z1, x1, y10, z0);
+        }
+      }
+      meshes.terrain = createMeshBuffers(tp, tn, tc);
+    }
+
+    function initGraphics() {
+      try {
+        gl = canvas.getContext('webgl', { antialias: true, preserveDrawingBuffer: true });
+        if (!gl) return false;
+
+        const vsSrc = `
+          attribute vec3 aPos;
+          attribute vec3 aNorm;
+          attribute vec3 aCol;
+          uniform mat4 uProj;
+          uniform mat4 uView;
+          uniform mat4 uModel;
+          uniform float uUseVertCol;
+          uniform vec3 uColor;
+          varying vec3 vNorm;
+          varying vec3 vWorldPos;
+          varying vec3 vColor;
+          void main() {
+            vec4 wp = uModel * vec4(aPos, 1.0);
+            vWorldPos = wp.xyz;
+            vNorm = normalize(mat3(uModel) * aNorm);
+            vColor = uUseVertCol > 0.5 ? aCol : uColor;
+            gl_Position = uProj * uView * wp;
+          }
+        `;
+        const fsSrc = `
+          precision mediump float;
+          varying vec3 vNorm;
+          varying vec3 vWorldPos;
+          varying vec3 vColor;
+          uniform vec3 uSunDir;
+          uniform vec3 uSunCol;
+          uniform vec3 uAmbCol;
+          uniform vec3 uFogCol;
+          uniform vec3 uCamPos;
+          uniform float uEmissive;
+          uniform float uAlpha;
+          uniform float uLampOn;
+          uniform vec3 uLampDir;
+          void main() {
+            vec3 n = normalize(vNorm);
+            float diff = max(dot(n, normalize(uSunDir)), 0.0);
+            vec3 light = uAmbCol + uSunCol * diff;
+            if (uLampOn > 0.5) {
+              vec3 toFrag = vWorldPos - uCamPos;
+              float dist = length(toFrag);
+              vec3 dir = toFrag / max(dist, 0.001);
+              float spot = smoothstep(0.78, 0.96, dot(dir, normalize(uLampDir)));
+              float atten = clamp(1.0 - dist / 68.0, 0.0, 1.0);
+              light += vec3(1.0, 0.95, 0.80) * spot * atten * 1.45;
+            }
+            vec3 lit = vColor * (light + vec3(uEmissive));
+            float distCam = length(vWorldPos - uCamPos);
+            float fogF = clamp((distCam - 45.0) / 360.0, 0.0, 0.94);
+            vec3 finalCol = mix(lit, uFogCol, fogF);
+            gl_FragColor = vec4(finalCol, uAlpha);
+          }
+        `;
+
+        const compile = (type, src) => {
+          const s = gl.createShader(type);
+          gl.shaderSource(s, src);
+          gl.compileShader(s);
+          if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) return null;
+          return s;
+        };
+        const vs = compile(gl.VERTEX_SHADER, vsSrc);
+        const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+        if (!vs || !fs) return false;
+
+        program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return false;
+
+        gl.useProgram(program);
+        ['uProj', 'uView', 'uModel', 'uUseVertCol', 'uColor', 'uSunDir', 'uSunCol', 'uAmbCol', 'uFogCol', 'uCamPos', 'uEmissive', 'uAlpha', 'uLampOn', 'uLampDir'].forEach(name => {
+          uniforms[name] = gl.getUniformLocation(program, name);
+        });
+
+        buildPrimitiveMeshes();
+        gl.enable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function drawMesh(mesh, modelMat, color, emissive = 0.0, alpha = 1.0, useVertCol = false) {
+      const aPos = gl.getAttribLocation(program, 'aPos');
+      const aNorm = gl.getAttribLocation(program, 'aNorm');
+      const aCol = gl.getAttribLocation(program, 'aCol');
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.posBuf);
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, mesh.normBuf);
+      gl.enableVertexAttribArray(aNorm);
+      gl.vertexAttribPointer(aNorm, 3, gl.FLOAT, false, 0, 0);
+
+      if (useVertCol && mesh.colBuf) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.colBuf);
+        gl.enableVertexAttribArray(aCol);
+        gl.vertexAttribPointer(aCol, 3, gl.FLOAT, false, 0, 0);
+        gl.uniform1f(uniforms.uUseVertCol, 1.0);
+      } else {
+        gl.disableVertexAttribArray(aCol);
+        gl.uniform1f(uniforms.uUseVertCol, 0.0);
+      }
+
+      gl.uniformMatrix4fv(uniforms.uModel, false, modelMat);
+      gl.uniform3fv(uniforms.uColor, color);
+      gl.uniform1f(uniforms.uEmissive, emissive);
+      gl.uniform1f(uniforms.uAlpha, alpha);
+      gl.drawArrays(gl.TRIANGLES, 0, mesh.count);
+    }
+
+    // =========================================================================
+    // 7. UI & NOTIFICATION HELPERS
+    // =========================================================================
+    let msgTimeout = null;
+    function showFloatMsg(text, color = '#f8fafc') {
+      const el = document.getElementById('float-msg');
+      el.textContent = text;
+      el.style.color = color;
+      el.style.opacity = '1';
+      clearTimeout(msgTimeout);
+      msgTimeout = setTimeout(() => { el.style.opacity = '0'; }, 2400);
+    }
+
+    function flashHitmarker() {
+      const hm = document.getElementById('hitmarker');
+      hm.style.opacity = '1';
+      setTimeout(() => { hm.style.opacity = '0'; }, 130);
+    }
+
+    function toggleLamp() {
+      if (state.inRanger) {
+        ranger.headlights = !ranger.headlights;
+        showFloatMsg(`Polaris Ranger Headlights ${ranger.headlights ? 'ON' : 'OFF'}`, '#fbbf24');
+      } else {
+        state.lampOn = !state.lampOn;
+        showFloatMsg(`Headlamp ${state.lampOn ? 'ON' : 'OFF'}`, '#fbbf24');
+      }
+      updateHUD();
+    }
+
+    // =========================================================================
+    // 8. SHOOTING, FISHING & INTERACTION LOGIC
+    // =========================================================================
+    function useDuckCall() {
+      if (!state.started || state.paused || state.callCd > 0) return;
+      state.callCd = 1.15;
+      state.recoil = 0.85;
+      sfx.duckCall();
+
+      let luredCount = 0;
+      let nearestHole = null;
+      let bestHoleDist = 180;
+      for (const wh of WATER_HOLES) {
+        const d = Math.hypot(wh.x - player.x, wh.z - player.z);
+        if (d < bestHoleDist) {
+          bestHoleDist = d;
+          nearestHole = wh;
+        }
+      }
+
+      animals.forEach(a => {
+        if (a.dead || a.looted || !a.species.isBird) return;
+        const d = Math.hypot(a.x - player.x, a.z - player.z);
+        if (d < 220) {
+          luredCount++;
+          const tx = nearestHole ? nearestHole.x : player.x;
+          const tz = nearestHole ? nearestHole.z : player.z;
+          a.lureTarget = { x: tx + (Math.random() - 0.5) * 14, z: tz + (Math.random() - 0.5) * 14 };
+          a.lureTimer = 14.0;
+          a.aiState = 'FLY';
+          a.aiTimer = 14.0;
+          a.yaw = Math.atan2(a.lureTarget.x - a.x, a.lureTarget.z - a.z);
+        }
+      });
+
+      showFloatMsg(
+        luredCount > 0
+          ? `Duck Call: Lured ${luredCount} nearby waterfowl toward ${nearestHole ? nearestHole.name : 'your position'}!`
+          : 'Duck Call echoed across the marsh (no waterfowl within 220m).',
+        '#fbbf24'
+      );
+    }
+
+    function fireOrCast() {
+      if (!state.started || state.paused || state.inRanger) return;
+
+      // Slot 6: Duck Call
+      if (state.activeSlot === 6) {
+        useDuckCall();
+        return;
+      }
+
+      // Slot 5: Fishing Rod
+      if (state.activeSlot === 5) {
+        handleFishingClick();
+        return;
+      }
+
+      // Slot 0..4: Firearms
+      const gun = GUNS[state.activeSlot];
+      if (!state.ownedGuns[gun.id]) {
+        showFloatMsg('You do not own this firearm yet! Buy it at the Frontier Armory.', '#f87171');
+        return;
+      }
+      if (state.reloadTimer > 0 || state.fireCd > 0) return;
+      if (state.ammo[gun.id] <= 0) {
+        startReload();
+        return;
+      }
+
+      state.ammo[gun.id]--;
+      state.fireCd = gun.rate;
+      state.recoil = 1.0;
+      sfx.gunshot(gun.id);
+      updateHUD();
+
+      const fwdX = Math.sin(player.yaw) * Math.cos(player.pitch);
+      const fwdY = -Math.sin(player.pitch);
+      const fwdZ = -Math.cos(player.yaw) * Math.cos(player.pitch);
+
+      // Alert nearby animals (much smaller alert radius if concealed inside a Blind!)
+      const alertRadius = state.inBlind ? 26 : 85;
+      animals.forEach(a => {
+        if (a.dead) return;
+        const d = Math.hypot(a.x - player.x, a.z - player.z);
+        if (d < alertRadius && a.aiState !== 'CHASE') {
+          if (a.species.isBird) {
+            a.aiState = 'FLY';
+            a.aiTimer = 8 + Math.random() * 6;
+          } else {
+            a.aiState = 'FLEE';
+            a.aiTimer = 5.5;
+            a.yaw = Math.atan2(a.x - player.x, a.z - player.z) + (Math.random() - 0.5) * 0.5;
+          }
+        }
+      });
+
+      let hitAny = false;
+      for (let p = 0; p < gun.pellets; p++) {
+        const dx = fwdX + (Math.random() - 0.5) * gun.spread;
+        const dy = fwdY + (Math.random() - 0.5) * gun.spread;
+        const dz = fwdZ + (Math.random() - 0.5) * gun.spread;
+        const len = Math.hypot(dx, dy, dz);
+        const rdx = dx / len, rdy = dy / len, rdz = dz / len;
+
+        let bestAnimal = null;
+        let bestDist = gun.range;
+
+        for (const a of animals) {
+          if (a.dead) continue;
+          const targetY = a.y + (a.species.isBird ? 0.35 : 0.85 * a.species.sz);
+          const vx = a.x - player.x, vy = targetY - player.y, vz = a.z - player.z;
+          const proj = vx * rdx + vy * rdy + vz * rdz;
+          if (proj < 0.5 || proj > bestDist) continue;
+          const perpSq = (vx * vx + vy * vy + vz * vz) - proj * proj;
+          const hitRad = (a.species.isBird ? 1.05 : 1.22) * a.species.sz;
+          if (perpSq <= hitRad * hitRad) {
+            bestDist = proj;
+            bestAnimal = a;
+          }
+        }
+
+        if (bestAnimal) {
+          hitAny = true;
+          const dmg = Math.round(gun.dmg * state.dmgMult);
+          bestAnimal.hp -= dmg;
+          bestAnimal.hitFlash = 0.22;
+
+          if (bestAnimal.hp <= 0 && !bestAnimal.dead) {
+            bestAnimal.dead = true;
+            bestAnimal.hp = 0;
+            if (bestAnimal.species.isBird) {
+              bestAnimal.y = Math.max(-0.62, getTerrainHeight(bestAnimal.x, bestAnimal.z));
+            }
+            sfx.tone(520, 0.18, 'sine', 0.25);
+            showFloatMsg(`Downed ${bestAnimal.species.name}! Walk up and press [E] to bag.`, '#34d399');
+          } else if (!bestAnimal.dead) {
+            if (bestAnimal.species.predator) {
+              bestAnimal.aiState = 'CHASE';
+              bestAnimal.aiTimer = 25;
+              showFloatMsg(`ENRAGED ${bestAnimal.species.name} IS CHARGING YOU!`, '#ef4444');
+            } else if (bestAnimal.species.isBird) {
+              bestAnimal.aiState = 'FLY';
+              bestAnimal.aiTimer = 8;
+            } else {
+              bestAnimal.aiState = 'FLEE';
+              bestAnimal.aiTimer = 6;
+              bestAnimal.yaw = Math.atan2(bestAnimal.x - player.x, bestAnimal.z - player.z);
+            }
+          }
+        }
+      }
+      if (hitAny) flashHitmarker();
+    }
+
+    function startReload() {
+      if (state.activeSlot >= 5) return;
+      const gun = GUNS[state.activeSlot];
+      if (!state.ownedGuns[gun.id] || state.ammo[gun.id] === gun.mag || state.reloadTimer > 0) return;
+      state.reloadTimer = 1.25;
+      sfx.tone(240, 0.12, 'square', 0.15);
+      showFloatMsg(`Reloading ${gun.name}...`, '#fbbf24');
+    }
+
+    function handleFishingClick() {
+      const f = state.fishing;
+      if (!f.active) {
+        // Check if looking toward a water hole within casting range
+        const fwdX = Math.sin(player.yaw);
+        const fwdZ = -Math.cos(player.yaw);
+        const castX = player.x + fwdX * 16;
+        const castZ = player.z + fwdZ * 16;
+        let targetHole = null;
+        for (const wh of WATER_HOLES) {
+          if (Math.hypot(castX - wh.x, castZ - wh.z) <= wh.r + 3) {
+            targetHole = wh;
+            break;
+          }
+        }
+        if (!targetHole) {
+          showFloatMsg('Aim at a biome water hole (Pond, Ice Hole, Lagoon, or Oasis) to cast!', '#38bdf8');
+          return;
+        }
+        f.active = true;
+        f.hole = targetHole;
+        f.bx = castX;
+        f.by = -0.62;
+        f.bz = castZ;
+        f.timer = 0;
+        const rod = RODS[state.equippedRod];
+        f.biteTimer = Math.max(1.5, (4.8 - Math.random() * 2.0) / (rod.biteSpd * (state.deluxeLure ? 1.4 : 1.0)));
+        f.hooked = null;
+        f.progress = 0.32;
+        f.tension = 0.18;
+        sfx.splash();
+        document.getElementById('fishing-panel').classList.remove('hidden');
+        document.getElementById('fish-status-title').textContent = `Casting in ${targetHole.name}...`;
+        document.getElementById('fish-bite-alert').textContent = 'Waiting for bite';
+      } else if (!f.hooked) {
+        // Reeled in early before a bite
+        cancelFishing();
+        showFloatMsg('Reeled line back in.', '#94a3b8');
+      }
+    }
+
+    function cancelFishing() {
+      state.fishing.active = false;
+      state.fishing.hooked = null;
+      document.getElementById('fishing-panel').classList.add('hidden');
+    }
+
+    function handleInteract() {
+      if (state.inRanger) {
+        state.inRanger = false;
+        player.x = ranger.x + Math.cos(ranger.yaw) * 2.2;
+        player.z = ranger.z - Math.sin(ranger.yaw) * 2.2;
+        player.y = getTerrainHeight(player.x, player.z) + 1.75;
+        player.vy = 0;
+        showFloatMsg('Exited Polaris Ranger UTV.', '#cbd5e1');
+        updateHUD();
+        return;
+      }
+      if (state.nearCounter) {
+        openBuildingShop(state.nearCounter.buildingId);
+        return;
+      }
+      if (state.nearRanger) {
+        if (state.fishing.active) cancelFishing();
+        state.inRanger = true;
+        ranger.lookOffsetYaw = 0;
+        player.yaw = ranger.yaw;
+        player.pitch = 0.08;
+        state.scoped = false;
+        document.getElementById('scope-overlay').classList.add('hidden');
+        sfx.step(false, true);
+        showFloatMsg('Driving Polaris Ranger 1000! [W/S] Gas/Reverse • [A/D] Steer • [Space] Brake • [E] Exit', '#34d399');
+        updateHUD();
+        return;
+      }
+      if (state.nearLoot) {
+        if (state.bag.length >= state.bagCap) {
+          showFloatMsg('Game Bag is FULL! Sell your harvest at the Trading Post.', '#f87171');
+          return;
+        }
+        const a = state.nearLoot;
+        a.looted = true;
+        state.bag.push({ name: a.species.name, val: a.species.val, type: 'Game' });
+        state.trophies[a.species.id] = (state.trophies[a.species.id] || 0) + 1;
+        sfx.tone(660, 0.16, 'triangle', 0.25);
+        showFloatMsg(`Bagged ${a.species.name} ($${a.species.val})!`, '#34d399');
+        updateHUD();
+        return;
+      }
+      if (state.inBlind) {
+        const b = state.inBlind;
+        state.inBlind = null;
+        player.x = b.x + 2.2;
+        player.z = b.z + 2.2;
+        player.y = getTerrainHeight(player.x, player.z) + 1.75;
+        showFloatMsg(`Exited ${b.name}.`, '#cbd5e1');
+        updateHUD();
+        return;
+      }
+      if (state.nearBlind) {
+        if (state.fishing.active) cancelFishing();
+        state.inBlind = state.nearBlind;
+        player.x = state.inBlind.x;
+        player.z = state.inBlind.z;
+        player.y = state.inBlind.eyeY;
+        sfx.step(false, true);
+        showFloatMsg(`Entered ${state.inBlind.name} (Concealed from wildlife!)`, '#34d399');
+        updateHUD();
+        return;
+      }
+      if (state.nearFeeder) {
+        if (state.baitBags <= 0) {
+          showFloatMsg('No Corn Bait Bags! Buy more at the Frontier Armory.', '#f87171');
+          return;
+        }
+        state.baitBags--;
+        state.nearFeeder.cornTimer = 240;
+        sfx.tone(480, 0.18, 'triangle', 0.22);
+        showFloatMsg('Filled Deer Feeder with Golden Corn! Attracting nearby game...', '#fbbf24');
+        updateHUD();
+      }
+    }
+
+    // =========================================================================
+    // 9. WALK-IN BASE CAMP BUILDING INTERIORS & SHOPS
+    // =========================================================================
+    function openBuildingShop(buildingId) {
+      state.paused = true;
+      state.scoped = false;
+      document.getElementById('scope-overlay').classList.add('hidden');
+      if (document.pointerLockElement) document.exitPointerLock();
+
+      const modal = document.getElementById('shop-modal');
+      const title = document.getElementById('modal-title');
+      const sub = document.getElementById('modal-subtitle');
+      const body = document.getElementById('modal-body');
+      document.getElementById('modal-cash').textContent = `$${state.cash}`;
+      modal.classList.remove('hidden');
+
+      if (buildingId === 'TRADING') {
+        sub.textContent = 'West Outpost Building';
+        title.textContent = 'Trading Post & Butcher Hall';
+        const totalVal = state.bag.reduce((s, it) => s + it.val, 0);
+        let html = `
+          <p style="color:#cbd5e1; font-size:13px; margin-bottom:12px;">
+            Sell harvested game meat, waterfowl, and fresh biome fish for cash.
+          </p>
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(16,185,129,0.12); border:1px solid rgba(16,185,129,0.3); padding:12px; border-radius:10px; margin-bottom:12px;">
+            <div><strong>Bag Contents:</strong> ${state.bag.length} / ${state.bagCap} items</div>
+            <button class="btn btn-primary" id="btn-sell-all" ${state.bag.length === 0 ? 'disabled' : ''}>Sell All ($${totalVal})</button>
+          </div>
+          <div class="shop-grid">
+        `;
+        if (state.bag.length === 0) {
+          html += `<div style="color:#94a3b8; font-size:13px;">Your game bag is currently empty. Head into the wilderness to hunt or fish!</div>`;
+        } else {
+          state.bag.forEach((item, idx) => {
+            html += `
+              <div class="shop-item">
+                <div>
+                  <div style="font-size:11px; color:#38bdf8; font-weight:700;">${item.type}</div>
+                  <div style="font-size:15px; font-weight:800;">${item.name}</div>
+                </div>
+                <button class="btn btn-amber" data-sell-idx="${idx}">Sell for $${item.val}</button>
+              </div>
+            `;
+          });
+        }
+        html += `</div>`;
+        body.innerHTML = html;
+
+        const sellAllBtn = document.getElementById('btn-sell-all');
+        if (sellAllBtn) {
+          sellAllBtn.onclick = () => {
+            state.cash += totalVal;
+            state.bag = [];
+            sfx.tone(780, 0.22, 'triangle', 0.28);
+            openBuildingShop('TRADING');
+            updateHUD();
+          };
+        }
+        body.querySelectorAll('[data-sell-idx]').forEach(btn => {
+          btn.onclick = () => {
+            const idx = Number(btn.getAttribute('data-sell-idx'));
+            const item = state.bag[idx];
+            if (item) {
+              state.cash += item.val;
+              state.bag.splice(idx, 1);
+              sfx.tone(740, 0.16, 'triangle', 0.25);
+              openBuildingShop('TRADING');
+              updateHUD();
+            }
+          };
+        });
+      } else if (buildingId === 'ARMORY') {
+        sub.textContent = 'East Outpost Building';
+        title.textContent = 'Frontier Armory & Field Outfitter';
+        let html = `<h3 style="font-size:15px; color:#fbbf24; margin-bottom:6px;">Firearms</h3><div class="shop-grid">`;
+        GUNS.forEach(g => {
+          const owned = state.ownedGuns[g.id];
+          const equipped = state.activeSlot === g.id;
+          html += `
+            <div class="shop-item">
+              <div>
+                <div style="font-size:11px; color:#94a3b8;">Slot [${g.slot}] • Zoom ${g.zoom}x</div>
+                <div style="font-size:15px; font-weight:800;">${g.name}</div>
+                <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">Damage: ${g.dmg * g.pellets} • Mag: ${g.mag}</div>
+              </div>
+              ${owned
+                ? `<button class="btn ${equipped ? 'btn-primary' : 'btn-ghost'}" data-equip-gun="${g.id}">${equipped ? 'Equipped' : 'Equip'}</button>`
+                : `<button class="btn btn-amber" data-buy-gun="${g.id}" ${state.cash < g.cost ? 'disabled' : ''}>Buy ($${g.cost})</button>`
+              }
+            </div>
+          `;
+        });
+        html += `</div><h3 style="font-size:15px; color:#38bdf8; margin:16px 0 6px;">Field Upgrades & Bait</h3><div class="shop-grid">
+          <div class="shop-item">
+            <div><strong>Corn Feeder Bait Bag</strong><div style="font-size:12px; color:#cbd5e1;">Refills 1 wilderness Deer Feeder (Owned: ${state.baitBags})</div></div>
+            <button class="btn btn-amber" id="btn-buy-bait" ${state.cash < 40 ? 'disabled' : ''}>Buy Bait ($40)</button>
+          </div>
+          <div class="shop-item">
+            <div><strong>Expanded Game Pack</strong><div style="font-size:12px; color:#cbd5e1;">Increase bag capacity (+3 slots, current: ${state.bagCap})</div></div>
+            <button class="btn btn-sky" id="btn-up-bag" ${state.cash < 180 ? 'disabled' : ''}>Upgrade ($180)</button>
+          </div>
+          <div class="shop-item">
+            <div><strong>High-Velocity Ammo</strong><div style="font-size:12px; color:#cbd5e1;">+20% firearm damage (Current: ${Math.round(state.dmgMult * 100)}%)</div></div>
+            <button class="btn btn-sky" id="btn-up-dmg" ${state.cash < 300 ? 'disabled' : ''}>Upgrade ($300)</button>
+          </div>
+          <div class="shop-item">
+            <div><strong>All-Terrain Boots</strong><div style="font-size:12px; color:#cbd5e1;">+15% sprint &amp; walking speed</div></div>
+            <button class="btn btn-sky" id="btn-up-spd" ${state.cash < 220 ? 'disabled' : ''}>Upgrade ($220)</button>
+          </div>
+        </div>`;
+        body.innerHTML = html;
+
+        body.querySelectorAll('[data-buy-gun]').forEach(btn => {
+          btn.onclick = () => {
+            const id = Number(btn.getAttribute('data-buy-gun'));
+            const g = GUNS[id];
+            if (state.cash >= g.cost && !state.ownedGuns[id]) {
+              state.cash -= g.cost;
+              state.ownedGuns[id] = true;
+              state.ammo[id] = g.mag;
+              state.activeSlot = id;
+              sfx.tone(620, 0.2, 'triangle', 0.26);
+              openBuildingShop('ARMORY');
+              updateHUD();
+            }
+          };
+        });
+        body.querySelectorAll('[data-equip-gun]').forEach(btn => {
+          btn.onclick = () => {
+            state.activeSlot = Number(btn.getAttribute('data-equip-gun'));
+            openBuildingShop('ARMORY');
+            updateHUD();
+          };
+        });
+        document.getElementById('btn-buy-bait').onclick = () => {
+          if (state.cash >= 40) { state.cash -= 40; state.baitBags++; openBuildingShop('ARMORY'); updateHUD(); }
+        };
+        document.getElementById('btn-up-bag').onclick = () => {
+          if (state.cash >= 180) { state.cash -= 180; state.bagCap += 3; openBuildingShop('ARMORY'); updateHUD(); }
+        };
+        document.getElementById('btn-up-dmg').onclick = () => {
+          if (state.cash >= 300) { state.cash -= 300; state.dmgMult += 0.2; openBuildingShop('ARMORY'); updateHUD(); }
+        };
+        document.getElementById('btn-up-spd').onclick = () => {
+          if (state.cash >= 220) { state.cash -= 220; state.speedMult += 0.15; openBuildingShop('ARMORY'); updateHUD(); }
+        };
+      } else if (buildingId === 'TACKLE') {
+        sub.textContent = 'South Outpost Building';
+        title.textContent = 'Bait & Tackle Fishing Shop';
+        let html = `<p style="color:#cbd5e1; font-size:13px;">Equip Slot [6] to cast into any of the 4 biome water holes and catch unique regional fish.</p><div class="shop-grid">`;
+        RODS.forEach(r => {
+          const owned = state.ownedRods[r.id];
+          const eq = state.equippedRod === r.id;
+          html += `
+            <div class="shop-item">
+              <div>
+                <div style="font-size:15px; font-weight:800;">${r.name}</div>
+                <div style="font-size:12px; color:#cbd5e1; margin-top:4px;">Reel Power: ${r.power}x • Bite Speed: ${r.biteSpd}x</div>
+              </div>
+              ${owned
+                ? `<button class="btn ${eq ? 'btn-primary' : 'btn-ghost'}" data-eq-rod="${r.id}">${eq ? 'Equipped [6]' : 'Equip Rod'}</button>`
+                : `<button class="btn btn-amber" data-buy-rod="${r.id}" ${state.cash < r.cost ? 'disabled' : ''}>Buy ($${r.cost})</button>`
+              }
+            </div>
+          `;
+        });
+        html += `
+          <div class="shop-item">
+            <div><strong>Braided Kevlar Line</strong><div style="font-size:12px; color:#cbd5e1;">Reduces line tension buildup by 35%</div></div>
+            <button class="btn btn-sky" id="btn-kevlar" ${state.kevlarLine || state.cash < 200 ? 'disabled' : ''}>${state.kevlarLine ? 'Owned' : 'Buy ($200)'}</button>
+          </div>
+          <div class="shop-item">
+            <div><strong>Deluxe Spinner Lure Box</strong><div style="font-size:12px; color:#cbd5e1;">Attracts rare trophy fish 40% faster</div></div>
+            <button class="btn btn-sky" id="btn-lure" ${state.deluxeLure || state.cash < 260 ? 'disabled' : ''}>${state.deluxeLure ? 'Owned' : 'Buy ($260)'}</button>
+          </div>
+        </div>`;
+        body.innerHTML = html;
+
+        body.querySelectorAll('[data-buy-rod]').forEach(btn => {
+          btn.onclick = () => {
+            const id = Number(btn.getAttribute('data-buy-rod'));
+            const r = RODS[id];
+            if (state.cash >= r.cost && !state.ownedRods[id]) {
+              state.cash -= r.cost;
+              state.ownedRods[id] = true;
+              state.equippedRod = id;
+              state.activeSlot = 5;
+              openBuildingShop('TACKLE');
+              updateHUD();
+            }
+          };
+        });
+        body.querySelectorAll('[data-eq-rod]').forEach(btn => {
+          btn.onclick = () => {
+            state.equippedRod = Number(btn.getAttribute('data-eq-rod'));
+            state.activeSlot = 5;
+            openBuildingShop('TACKLE');
+            updateHUD();
+          };
+        });
+        document.getElementById('btn-kevlar').onclick = () => {
+          if (state.cash >= 200 && !state.kevlarLine) { state.cash -= 200; state.kevlarLine = true; openBuildingShop('TACKLE'); updateHUD(); }
+        };
+        document.getElementById('btn-lure').onclick = () => {
+          if (state.cash >= 260 && !state.deluxeLure) { state.cash -= 260; state.deluxeLure = true; openBuildingShop('TACKLE'); updateHUD(); }
+        };
+      } else if (buildingId === 'LODGE') {
+        sub.textContent = 'North Outpost Building';
+        title.textContent = "Hunter's Trophy Lodge & Bunkhouse";
+        let html = `
+          <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:space-between; align-items:center; background:rgba(56,189,248,0.12); border:1px solid rgba(56,189,248,0.28); padding:12px; border-radius:10px; margin-bottom:14px;">
+            <div>
+              <strong>Lodge Bunk &amp; First-Aid Station</strong>
+              <div style="font-size:12px; color:#cbd5e1;">Restore full Health (100 HP) and refill all firearm magazines.</div>
+            </div>
+            <button class="btn btn-primary" id="btn-lodge-rest">Rest &amp; Resupply (Free)</button>
+          </div>
+          <h3 style="font-size:15px; color:#fbbf24; margin-bottom:8px;">Harvest Trophy Wall (${Object.keys(state.trophies).length} / ${TROPHY_LIST.length} Species)</h3>
+          <div class="shop-grid">
+        `;
+        TROPHY_LIST.forEach(tr => {
+          const count = state.trophies[tr.id] || 0;
+          html += `
+            <div class="shop-item" style="border-color:${count > 0 ? 'rgba(245,158,11,0.55)' : 'rgba(255,255,255,0.08)'};">
+              <div style="font-weight:800; color:${count > 0 ? '#fbbf24' : '#64748b'};">${tr.name}</div>
+              <div style="font-size:12px; color:${count > 0 ? '#34d399' : '#64748b'};">${count > 0 ? `Mounted (${count} harvested)` : 'Not Yet Harvested'}</div>
+            </div>
+          `;
+        });
+        html += `</div>`;
+        body.innerHTML = html;
+
+        document.getElementById('btn-lodge-rest').onclick = () => {
+          state.hp = state.maxHp;
+          GUNS.forEach(g => { if (state.ownedGuns[g.id]) state.ammo[g.id] = g.mag; });
+          sfx.tone(540, 0.25, 'sine', 0.25);
+          showFloatMsg('Health & Ammo Fully Restored!', '#34d399');
+          updateHUD();
+        };
+      }
+    }
+
+    function closeBuildingShop() {
+      state.paused = false;
+      document.getElementById('shop-modal').classList.add('hidden');
+      if (state.started && canvas.requestPointerLock) {
+        try { canvas.requestPointerLock(); } catch (e) {}
+      }
+    }
+
+    // =========================================================================
+    // 10. HUD SYNCHRONIZATION
+    // =========================================================================
+    function updateHUD() {
+      document.getElementById('hud-hp').textContent = `${Math.ceil(state.hp)} / ${state.maxHp}`;
+      document.getElementById('hud-hp-bar').style.width = `${Math.max(0, (state.hp / state.maxHp) * 100)}%`;
+      document.getElementById('hud-cash').textContent = `$${state.cash}`;
+      document.getElementById('hud-bag').textContent = `${state.bag.length} / ${state.bagCap}`;
+      document.getElementById('hud-bait').textContent = `${state.baitBags} Bag${state.baitBags === 1 ? '' : 's'}`;
+
+      const bKey = getBiomeAt(player.x, player.z);
+      let locText = BIOMES[bKey].name;
+      if (state.inRanger) locText = `Driving: Polaris Ranger (${Math.round(Math.abs(ranger.speed) * 2.2)} mph)`;
+      else if (state.insideBuilding) locText = `Inside: ${state.insideBuilding.name}`;
+      else if (state.inBlind) locText = `Concealed: ${state.inBlind.name}`;
+      document.getElementById('hud-biome').textContent = locText;
+
+      const hr = Math.floor(state.timeOfDay) % 24;
+      const mn = Math.floor((state.timeOfDay % 1) * 60);
+      const ampm = hr >= 12 ? 'PM' : 'AM';
+      const h12 = hr % 12 === 0 ? 12 : hr % 12;
+      const lightStatus = state.inRanger
+        ? `UTV Lights ${ranger.headlights ? 'ON' : 'OFF'}`
+        : `Lamp ${state.lampOn ? 'ON' : 'OFF'}`;
+      document.getElementById('hud-time').textContent =
+        `${String(h12).padStart(2, '0')}:${String(mn).padStart(2, '0')} ${ampm} • ${lightStatus}`;
+
+      // Hotbar
+      const hb = document.getElementById('hotbar');
+      let hbHtml = '';
+      GUNS.forEach(g => {
+        const owned = state.ownedGuns[g.id];
+        const act = state.activeSlot === g.id;
+        hbHtml += `<div class="slot ${owned ? 'owned' : ''} ${act ? 'active' : ''}">[${g.slot}] ${g.name.split(' ')[0]}</div>`;
+      });
+      hbHtml += `<div class="slot owned ${state.activeSlot === 5 ? 'active' : ''}">[6] Fishing Rod</div>`;
+      hbHtml += `<div class="slot owned ${state.activeSlot === 6 ? 'active' : ''}">[7] Duck Call</div>`;
+      hb.innerHTML = hbHtml;
+
+      if (state.activeSlot < 5) {
+        const g = GUNS[state.activeSlot];
+        document.getElementById('hud-weapon-name').textContent = g.name;
+        document.getElementById('hud-weapon-sub').textContent = state.ownedGuns[g.id]
+          ? `Ammo: ${state.ammo[g.id]} / ${g.mag} • DMG: ${Math.round(g.dmg * g.pellets * state.dmgMult)}`
+          : `Locked ($${g.cost} at Armory)`;
+      } else if (state.activeSlot === 5) {
+        const r = RODS[state.equippedRod];
+        document.getElementById('hud-weapon-name').textContent = r.name;
+        document.getElementById('hud-weapon-sub').textContent = `Power: ${r.power}x • Cast into Water Holes`;
+      } else {
+        document.getElementById('hud-weapon-name').textContent = 'Acrylic & Wood Duck Call';
+        document.getElementById('hud-weapon-sub').textContent = 'Click or Press [C] to Lure Ducks & Geese';
+      }
+    }
+
+    // =========================================================================
+    // 11. INPUT LISTENERS (MOUSE, KEYBOARD, TOUCH)
+    // =========================================================================
+    const keys = {};
+    let mouseDown = false;
+    let isDraggingLook = false;
+    let lastDragX = 0, lastDragY = 0;
+
+    window.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (e.code === 'Escape' && state.paused) {
+        closeBuildingShop();
+        return;
+      }
+      if (!state.started || state.paused) return;
+
+      if (e.code === 'Digit1') { state.activeSlot = 0; cancelFishing(); updateHUD(); }
+      if (e.code === 'Digit2') { state.activeSlot = 1; cancelFishing(); updateHUD(); }
+      if (e.code === 'Digit3') { state.activeSlot = 2; cancelFishing(); updateHUD(); }
+      if (e.code === 'Digit4') { state.activeSlot = 3; cancelFishing(); updateHUD(); }
+      if (e.code === 'Digit5') { state.activeSlot = 4; cancelFishing(); updateHUD(); }
+      if (e.code === 'Digit6') { state.activeSlot = 5; state.scoped = false; document.getElementById('scope-overlay').classList.add('hidden'); updateHUD(); }
+      if (e.code === 'Digit7') { state.activeSlot = 6; state.scoped = false; cancelFishing(); document.getElementById('scope-overlay').classList.add('hidden'); updateHUD(); }
+      if (e.code === 'KeyC') useDuckCall();
+      if (e.code === 'KeyR') startReload();
+      if (e.code === 'KeyE' || e.code === 'KeyF') handleInteract();
+      if (e.code === 'KeyL') toggleLamp();
+      if (e.code === 'KeyT') {
+        state.timeOfDay = (state.timeOfDay + 4) % 24;
+        showFloatMsg('Advanced Time +4 Hours', '#38bdf8');
+        updateHUD();
+      }
+      if (e.code === 'KeyZ' && state.activeSlot < 5 && !state.inRanger) {
+        state.scoped = !state.scoped;
+        document.getElementById('scope-overlay').classList.toggle('hidden', !state.scoped);
+      }
+    });
+
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    canvas.addEventListener('mousedown', e => {
+      if (!state.started || state.paused) return;
+      ensureAudio();
+      if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+        try { canvas.requestPointerLock(); } catch (err) {}
+      }
+      if (e.button === 0) {
+        mouseDown = true;
+        isDraggingLook = true;
+        lastDragX = e.clientX;
+        lastDragY = e.clientY;
+        fireOrCast();
+      } else if (e.button === 2 && state.activeSlot < 5 && !state.inRanger) {
+        state.scoped = !state.scoped;
+        document.getElementById('scope-overlay').classList.toggle('hidden', !state.scoped);
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      mouseDown = false;
+      isDraggingLook = false;
+    });
+
+    window.addEventListener('contextmenu', e => e.preventDefault());
+
+    window.addEventListener('mousemove', e => {
+      if (!state.started || state.paused) return;
+      const sens = state.scoped ? 0.0011 : 0.0024;
+      if (document.pointerLockElement === canvas) {
+        if (state.inRanger) {
+          ranger.lookOffsetYaw = Math.max(-1.6, Math.min(1.6, ranger.lookOffsetYaw + e.movementX * sens));
+        } else {
+          player.yaw += e.movementX * sens;
+        }
+        player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + e.movementY * sens));
+      } else if (isDraggingLook) {
+        if (state.inRanger) {
+          ranger.lookOffsetYaw = Math.max(-1.6, Math.min(1.6, ranger.lookOffsetYaw + (e.clientX - lastDragX) * sens * 1.4));
+        } else {
+          player.yaw += (e.clientX - lastDragX) * sens * 1.4;
+        }
+        player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch + (e.clientY - lastDragY) * sens * 1.4));
+        lastDragX = e.clientX;
+        lastDragY = e.clientY;
+      }
+    });
+
+    window.addEventListener('wheel', e => {
+      if (!state.started || state.paused) return;
+      const dir = e.deltaY > 0 ? 1 : -1;
+      state.activeSlot = (state.activeSlot + dir + 7) % 7;
+      if (state.activeSlot >= 5) {
+        state.scoped = false;
+        document.getElementById('scope-overlay').classList.add('hidden');
+      }
+      if (state.activeSlot !== 5) {
+        cancelFishing();
+      }
+      updateHUD();
+    }, { passive: true });
+
+    document.getElementById('btn-start').onclick = () => {
+      ensureAudio();
+      state.started = true;
+      document.getElementById('start-screen').classList.add('hidden');
+      if (canvas.requestPointerLock) {
+        try { canvas.requestPointerLock(); } catch (e) {}
+      }
+      updateHUD();
+    };
+    document.getElementById('btn-close-modal').onclick = closeBuildingShop;
+    document.getElementById('btn-interact').onclick = handleInteract;
+    document.getElementById('btn-call').onclick = useDuckCall;
+    document.getElementById('btn-lamp').onclick = toggleLamp;
+    document.getElementById('btn-reload').onclick = startReload;
+    document.getElementById('btn-scope').onclick = () => {
+      if (state.activeSlot < 5 && !state.inRanger) {
+        state.scoped = !state.scoped;
+        document.getElementById('scope-overlay').classList.toggle('hidden', !state.scoped);
+      }
+    };
+
+    // =========================================================================
+    // 12. SIMULATION UPDATE LOOP (MOVEMENT, DRIVING, FISHING, BLINDS, WILDLIFE)
+    // =========================================================================
+    function updateSimulation(dt) {
+      if (!state.started || state.paused) return;
+
+      // Day/Night clock progression (~1 game hour per 25 real seconds)
+      state.timeOfDay = (state.timeOfDay + dt * 0.04) % 24;
+
+      if (state.fireCd > 0) state.fireCd = Math.max(0, state.fireCd - dt);
+      if (state.callCd > 0) state.callCd = Math.max(0, state.callCd - dt);
+      if (state.recoil > 0) state.recoil = Math.max(0, state.recoil - dt * 4.5);
+      if (state.reloadTimer > 0) {
+        state.reloadTimer -= dt;
+        if (state.reloadTimer <= 0 && state.activeSlot < 5) {
+          const g = GUNS[state.activeSlot];
+          state.ammo[g.id] = g.mag;
+          sfx.tone(420, 0.14, 'triangle', 0.2);
+        }
+      }
+
+      // Keyboard arrow look support
+      const lookSpd = 1.9 * dt;
+      if (keys['ArrowLeft']) {
+        if (state.inRanger) ranger.lookOffsetYaw = Math.max(-1.6, ranger.lookOffsetYaw - lookSpd);
+        else player.yaw -= lookSpd;
+      }
+      if (keys['ArrowRight']) {
+        if (state.inRanger) ranger.lookOffsetYaw = Math.min(1.6, ranger.lookOffsetYaw + lookSpd);
+        else player.yaw += lookSpd;
+      }
+      if (keys['ArrowUp']) player.pitch = Math.max(-1.35, player.pitch - lookSpd * 0.8);
+      if (keys['ArrowDown']) player.pitch = Math.min(1.35, player.pitch + lookSpd * 0.8);
+
+      // Movement & Driving Input Axes
+      let fwd = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
+      let strafe = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
+
+      // Polaris Ranger UTV Car-Style Driving Physics
+      if (state.inRanger) {
+        const accel = 28.0;
+        const maxFwd = 30.0;
+        const maxRev = -13.0;
+        if (fwd > 0) {
+          ranger.speed = ranger.speed < -0.5
+            ? ranger.speed + accel * 2.2 * dt
+            : Math.min(maxFwd, ranger.speed + accel * dt);
+        } else if (fwd < 0) {
+          ranger.speed = ranger.speed > 0.5
+            ? ranger.speed - accel * 2.4 * dt
+            : Math.max(maxRev, ranger.speed - accel * 0.85 * dt);
+        } else {
+          ranger.speed *= Math.pow(0.28, dt);
+          if (Math.abs(ranger.speed) < 0.08) ranger.speed = 0;
+        }
+
+        if (keys['Space']) {
+          ranger.speed *= Math.pow(0.03, dt);
+        }
+
+        const targetSteer = strafe * 0.62;
+        ranger.steer += (targetSteer - ranger.steer) * Math.min(1, dt * 9);
+        if (Math.abs(ranger.speed) > 0.25) {
+          const dirSign = ranger.speed >= 0 ? 1 : -1;
+          const speedFactor = Math.min(1, Math.abs(ranger.speed) / 6.5);
+          ranger.yaw += ranger.steer * speedFactor * 2.45 * dirSign * dt;
+        }
+
+        const nx = Math.max(-435, Math.min(435, ranger.x + Math.sin(ranger.yaw) * ranger.speed * dt));
+        const nz = Math.max(-435, Math.min(435, ranger.z - Math.cos(ranger.yaw) * ranger.speed * dt));
+
+        let hitWall = false;
+        for (const wc of wallColliders) {
+          if (nx > wc.minX - 1.2 && nx < wc.maxX + 1.2 && nz > wc.minZ - 1.2 && nz < wc.maxZ + 1.2) hitWall = true;
+        }
+        if (!hitWall) {
+          ranger.x = nx;
+          ranger.z = nz;
+        } else {
+          ranger.speed = -ranger.speed * 0.25;
+        }
+
+        ranger.y = Math.max(-0.9, getTerrainHeight(ranger.x, ranger.z));
+        ranger.wheelSpin += ranger.speed * dt * 2.2;
+
+        // Smoothly recenter free-look when driving so camera follows behind the UTV like a normal car
+        if (!isDraggingLook && Math.abs(ranger.speed) > 1.5) {
+          ranger.lookOffsetYaw *= Math.pow(0.15, dt);
+        }
+        player.yaw = ranger.yaw + ranger.lookOffsetYaw;
+
+        // Third-person chase camera behind & slightly above the Polaris Ranger
+        const camDist = 5.4;
+        const camX = ranger.x - Math.sin(player.yaw) * camDist;
+        const camZ = ranger.z + Math.cos(player.yaw) * camDist;
+        const camGround = Math.max(-0.9, getTerrainHeight(camX, camZ));
+        player.x = camX;
+        player.z = camZ;
+        player.y = Math.max(camGround + 1.35, ranger.y + 2.65 + Math.sin(player.pitch) * 2.2);
+        player.stepDist += Math.abs(ranger.speed) * dt * 0.35;
+      } else {
+        ranger.y = Math.max(-0.9, getTerrainHeight(ranger.x, ranger.z));
+      }
+
+      if ((fwd !== 0 || strafe !== 0) && !state.inBlind && !state.inRanger) {
+        if (state.fishing.active) cancelFishing();
+        const len = Math.hypot(fwd, strafe);
+        fwd /= len; strafe /= len;
+        const sprint = (keys['ShiftLeft'] || keys['ShiftRight']) ? 1.55 : 1.0;
+        const spd = 8.8 * state.speedMult * sprint;
+        const sinY = Math.sin(player.yaw), cosY = Math.cos(player.yaw);
+        const mx = (sinY * fwd + cosY * strafe) * spd * dt;
+        const mz = (-cosY * fwd + sinY * strafe) * spd * dt;
+
+        const nextX = Math.max(-435, Math.min(435, player.x + mx));
+        const nextZ = Math.max(-435, Math.min(435, player.z + mz));
+
+        let blockedX = false, blockedZ = false;
+        for (const wc of wallColliders) {
+          if (nextX > wc.minX && nextX < wc.maxX && player.z > wc.minZ && player.z < wc.maxZ) blockedX = true;
+          if (player.x > wc.minX && player.x < wc.maxX && nextZ > wc.minZ && nextZ < wc.maxZ) blockedZ = true;
+        }
+        if (!blockedX) player.x = nextX;
+        if (!blockedZ) player.z = nextZ;
+
+        player.stepDist += Math.hypot(mx, mz);
+        if (player.stepDist > 2.6) {
+          player.stepDist = 0;
+          const gy = getTerrainHeight(player.x, player.z);
+          sfx.step(gy < -0.7, !!state.insideBuilding);
+        }
+      }
+
+      if (!state.inBlind && !state.inRanger) {
+        const groundY = Math.max(-1.1, getTerrainHeight(player.x, player.z)) + 1.75;
+        if (keys['Space'] && player.grounded) {
+          player.vy = 7.4;
+          player.grounded = false;
+        }
+        player.vy -= 19.5 * dt;
+        player.y += player.vy * dt;
+        if (player.y <= groundY) {
+          player.y = groundY;
+          player.vy = 0;
+          player.grounded = true;
+        }
+      }
+
+      state.nearRanger = !state.inRanger && Math.hypot(player.x - ranger.x, player.z - ranger.z) < 3.6;
+
+      // Check Building & Counter Proximity
+      state.insideBuilding = null;
+      state.nearCounter = null;
+      for (const b of CAMP_BUILDINGS) {
+        if (Math.abs(player.x - b.x) < b.w * 0.5 && Math.abs(player.z - b.z) < b.d * 0.5) {
+          state.insideBuilding = b;
+        }
+        if (Math.hypot(player.x - b.cx, player.z - b.cz) < 3.2) {
+          state.nearCounter = { buildingId: b.id, name: b.name };
+        }
+      }
+
+      // Check Blinds, Duck Blinds & Deer Feeders Proximity
+      state.nearBlind = null;
+      for (const bl of huntingBlinds) {
+        if (Math.hypot(player.x - bl.x, player.z - bl.z) < 3.2) state.nearBlind = bl;
+      }
+      for (const db of duckBlinds) {
+        if (Math.hypot(player.x - db.x, player.z - db.z) < 2.8) state.nearBlind = db;
+      }
+
+      state.nearFeeder = null;
+      for (const fd of deerFeeders) {
+        if (fd.cornTimer > 0) fd.cornTimer = Math.max(0, fd.cornTimer - dt);
+        if (Math.hypot(player.x - fd.x, player.z - fd.z) < 3.2) state.nearFeeder = fd;
+      }
+
+      // Fishing Reeling Mini-Game Update
+      if (state.fishing.active) {
+        const f = state.fishing;
+        f.timer += dt;
+        if (!f.hooked) {
+          f.biteTimer -= dt;
+          if (f.biteTimer <= 0) {
+            const pool = FISH_SPECIES[f.hole.biome];
+            f.hooked = pool[Math.floor(Math.random() * pool.length)];
+            sfx.splash();
+            sfx.tone(580, 0.2, 'triangle', 0.28);
+            document.getElementById('fish-status-title').textContent = `HOOKED: ${f.hooked.name}!`;
+            document.getElementById('fish-bite-alert').textContent = 'HOLD CLICK TO REEL!';
+          }
+        } else {
+          const rod = RODS[state.equippedRod];
+          const tensionFactor = state.kevlarLine ? 0.65 : 1.0;
+          if (mouseDown) {
+            f.progress += (0.28 * rod.power / f.hooked.diff) * dt;
+            f.tension += (0.48 * f.hooked.diff * tensionFactor) * dt;
+          } else {
+            f.progress -= 0.08 * dt;
+            f.tension -= 0.42 * dt;
+          }
+          f.tension = Math.max(0.05, f.tension);
+
+          document.getElementById('fish-catch-bar').style.width = `${Math.min(100, Math.max(0, f.progress * 100))}%`;
+          document.getElementById('fish-tension-bar').style.width = `${Math.min(100, f.tension * 100)}%`;
+
+          if (f.tension >= 1.0) {
+            sfx.tone(180, 0.25, 'sawtooth', 0.25);
+            showFloatMsg('The fishing line snapped! Release click when tension turns red.', '#ef4444');
+            cancelFishing();
+          } else if (f.progress >= 1.0) {
+            const caught = f.hooked;
+            cancelFishing();
+            if (state.bag.length < state.bagCap) {
+              state.bag.push({ name: caught.name, val: caught.val, type: 'Fish' });
+              sfx.tone(760, 0.24, 'triangle', 0.28);
+              showFloatMsg(`Landed ${caught.name} ($${caught.val})!`, '#38bdf8');
+            } else {
+              showFloatMsg(`Caught ${caught.name}, but your Game Bag is full!`, '#f87171');
+            }
+          }
+        }
+      }
+
+      // Underwater Fish Orbiting
+      underwaterFish.forEach(uf => { uf.angle += uf.speed * dt; });
+
+      // Wildlife & Waterfowl AI Update
+      state.nearLoot = null;
+      let bestLootDist = 3.6;
+
+      for (const a of animals) {
+        if (a.looted) continue;
+        if (a.hitFlash > 0) a.hitFlash = Math.max(0, a.hitFlash - dt);
+        if (a.atkCd > 0) a.atkCd = Math.max(0, a.atkCd - dt);
+
+        if (a.dead) {
+          const d = Math.hypot(a.x - player.x, a.z - player.z);
+          if (d < bestLootDist) {
+            bestLootDist = d;
+            state.nearLoot = a;
+          }
+          continue;
+        }
+
+        // Waterfowl Duck/Goose Flight & Pond Landing AI
+        if (a.species.isBird) {
+          a.aiTimer -= dt;
+          a.legPhase += (a.aiState === 'FLY' ? 14.0 : 2.5) * dt;
+          if (a.lureTimer > 0 && a.lureTarget) {
+            a.lureTimer -= dt;
+            const dx = a.lureTarget.x - a.x;
+            const dz = a.lureTarget.z - a.z;
+            const distLure = Math.hypot(dx, dz);
+            a.yaw = Math.atan2(dx, dz);
+            a.x += Math.sin(a.yaw) * a.species.spd * 1.15 * dt;
+            a.z += Math.cos(a.yaw) * a.species.spd * 1.15 * dt;
+            const targetAlt = distLure < 18 ? 1.5 : 8.5;
+            a.y += (targetAlt - a.y) * dt * 1.8;
+            if (distLure < 7) {
+              a.lureTimer = 0;
+              a.lureTarget = null;
+              a.aiState = 'SWIM';
+              a.aiTimer = 14 + Math.random() * 8;
+              a.y = -0.62;
+            }
+          } else if (a.aiState === 'FLY') {
+            a.yaw += 0.48 * dt;
+            a.x += Math.sin(a.yaw) * a.species.spd * dt;
+            a.z += Math.cos(a.yaw) * a.species.spd * dt;
+            const targetAlt = 14 + Math.sin(a.legPhase * 0.12) * 3.5;
+            a.y += (targetAlt - a.y) * dt * 1.5;
+            if (a.aiTimer <= 0 && a.homeHole) {
+              a.aiState = 'SWIM';
+              a.aiTimer = 8 + Math.random() * 8;
+              a.x = a.homeHole.x + (Math.random() - 0.5) * (a.homeHole.r * 0.9);
+              a.z = a.homeHole.z + (Math.random() - 0.5) * (a.homeHole.r * 0.9);
+              a.y = -0.62;
+            }
+          } else {
+            a.x += Math.sin(a.yaw) * 1.6 * dt;
+            a.z += Math.cos(a.yaw) * 1.6 * dt;
+            a.y = -0.62;
+            if (a.homeHole && Math.hypot(a.x - a.homeHole.x, a.z - a.homeHole.z) > a.homeHole.r * 0.72) {
+              a.yaw = Math.atan2(a.homeHole.x - a.x, a.homeHole.z - a.z);
+            }
+            if (a.aiTimer <= 0) {
+              a.aiState = 'FLY';
+              a.aiTimer = 7 + Math.random() * 7;
+            }
+          }
+          continue;
+        }
+
+        // Land Wildlife & Enraged Predator AI
+        const distPlayer = Math.hypot(a.x - player.x, a.z - player.z);
+        const detectRange = state.inBlind ? 9 : 24;
+
+        if (a.aiState === 'CHASE') {
+          a.yaw = Math.atan2(player.x - a.x, player.z - a.z);
+          const nx = a.x + Math.sin(a.yaw) * a.species.run * dt;
+          const nz = a.z + Math.cos(a.yaw) * a.species.run * dt;
+          if (Math.hypot(nx, nz) > 33) {
+            a.x = nx; a.z = nz;
+            a.y = getTerrainHeight(a.x, a.z);
+          }
+          a.legPhase += a.species.run * dt * 1.35;
+
+          if (distPlayer < 2.4 && a.atkCd <= 0 && !state.inBlind && !state.inRanger) {
+            a.atkCd = 1.25;
+            state.hp = Math.max(0, state.hp - a.species.atk);
+            sfx.tone(110, 0.22, 'sawtooth', 0.32);
+            const vig = document.getElementById('damage-vignette');
+            vig.style.opacity = '1';
+            setTimeout(() => { vig.style.opacity = '0'; }, 280);
+
+            if (state.hp <= 0) {
+              state.hp = state.maxHp;
+              state.bag = [];
+              state.inBlind = null;
+              state.inRanger = false;
+              player.x = 0; player.z = 4; player.y = 1.75;
+              a.aiState = 'WANDER';
+              showFloatMsg('Mauled by a predator! Rescued back to Base Camp (unbanked bag lost).', '#ef4444');
+            }
+          }
+          continue;
+        }
+
+        // Spook if player gets too close without a blind
+        if (distPlayer < detectRange && !state.inBlind) {
+          a.aiState = 'FLEE';
+          a.aiTimer = 4.5;
+          a.yaw = Math.atan2(a.x - player.x, a.z - player.z);
+        } else {
+          // Check if an active Corn Deer Feeder nearby attracts non-predators
+          let attracted = false;
+          if (!a.species.predator && a.aiState !== 'FLEE') {
+            for (const fd of deerFeeders) {
+              if (fd.cornTimer > 0) {
+                const df = Math.hypot(fd.x - a.x, fd.z - a.z);
+                if (df < 95 && df > 3.2) {
+                  a.yaw = Math.atan2(fd.x - a.x, fd.z - a.z);
+                  a.aiState = 'WANDER';
+                  attracted = true;
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!attracted) {
+            a.aiTimer -= dt;
+            if (a.aiTimer <= 0) {
+              if (a.aiState === 'FLEE') {
+                a.aiState = 'WANDER';
+                a.aiTimer = 4 + Math.random() * 5;
+              } else {
+                a.aiState = Math.random() < 0.32 ? 'GRAZE' : 'WANDER';
+                a.aiTimer = 3 + Math.random() * 5;
+                a.yaw += (Math.random() - 0.5) * 2.4;
+              }
+            }
+          }
+        }
+
+        if (a.aiState === 'WANDER' || a.aiState === 'FLEE') {
+          const spd = a.aiState === 'FLEE' ? a.species.run : a.species.spd * 0.55;
+          const nx = a.x + Math.sin(a.yaw) * spd * dt;
+          const nz = a.z + Math.cos(a.yaw) * spd * dt;
+          if (Math.hypot(nx, nz) > 36 && Math.abs(nx) < 425 && Math.abs(nz) < 425) {
+            a.x = nx; a.z = nz;
+            a.y = getTerrainHeight(a.x, a.z);
+            a.legPhase += spd * dt * 1.4;
+          } else {
+            a.yaw += Math.PI * 0.75;
+          }
+        }
+      }
+
+      // Context Prompt UI
+      const pBox = document.getElementById('prompt-box');
+      const pKey = document.getElementById('prompt-key');
+      const pTxt = document.getElementById('prompt-text');
+      if (state.inRanger) {
+        pKey.textContent = 'E';
+        pTxt.textContent = 'Exit Polaris Ranger UTV';
+        pBox.classList.remove('hidden');
+      } else if (state.nearRanger) {
+        pKey.textContent = 'E';
+        pTxt.textContent = 'Drive Polaris Ranger 1000 UTV';
+        pBox.classList.remove('hidden');
+      } else if (state.nearCounter) {
+        pKey.textContent = 'E';
+        pTxt.textContent = `Open ${state.nearCounter.name}`;
+        pBox.classList.remove('hidden');
+      } else if (state.nearLoot) {
+        pKey.textContent = 'E';
+        pTxt.textContent = `Harvest ${state.nearLoot.species.name} ($${state.nearLoot.species.val})`;
+        pBox.classList.remove('hidden');
+      } else if (state.inBlind) {
+        pKey.textContent = 'E';
+        pTxt.textContent = `Exit ${state.inBlind.name}`;
+        pBox.classList.remove('hidden');
+      } else if (state.nearBlind) {
+        pKey.textContent = 'E';
+        pTxt.textContent = `Enter ${state.nearBlind.name}`;
+        pBox.classList.remove('hidden');
+      } else if (state.nearFeeder) {
+        pKey.textContent = 'E';
+        pTxt.textContent = state.nearFeeder.cornTimer > 0
+          ? `Deer Feeder Active (${Math.ceil(state.nearFeeder.cornTimer)}s left) • Refill`
+          : `Fill Deer Feeder with Corn Bait (${state.baitBags} bags)`;
+        pBox.classList.remove('hidden');
+      } else {
+        pBox.classList.add('hidden');
+      }
+
+      updateHUD();
+    }
+
+    // =========================================================================
+    // 13. 3D SCENE RENDERER (WEBGL + 3D CANVAS FALLBACK)
+    // =========================================================================
+    function resizeCanvas() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.floor(canvas.clientWidth * dpr);
+      const h = Math.floor(canvas.clientHeight * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        if (gl) gl.viewport(0, 0, w, h);
+      }
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function renderWebGLScene(timeSec) {
+      const sunAngle = ((state.timeOfDay - 6) / 24) * Math.PI * 2;
+      const sunY = Math.sin(sunAngle);
+      const dayFactor = Math.max(0.08, Math.min(1.0, (sunY + 0.25) / 1.05));
+      const bInfo = BIOMES[getBiomeAt(player.x, player.z)];
+
+      const skyR = bInfo.sky[0] * dayFactor + 0.03 * (1 - dayFactor);
+      const skyG = bInfo.sky[1] * dayFactor + 0.05 * (1 - dayFactor);
+      const skyB = bInfo.sky[2] * dayFactor + 0.12 * (1 - dayFactor);
+
+      gl.clearColor(skyR, skyG, skyB, 1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      const activeGun = GUNS[state.activeSlot];
+      const fov = (state.scoped && activeGun) ? (1.05 / activeGun.zoom) : 1.05;
+      const proj = Mat4.perspective(fov, canvas.width / Math.max(1, canvas.height), 0.2, 540);
+      const view = Mat4.viewFPS(player.x, player.y, player.z, player.yaw, player.pitch);
+
+      gl.uniformMatrix4fv(uniforms.uProj, false, proj);
+      gl.uniformMatrix4fv(uniforms.uView, false, view);
+      gl.uniform3fv(uniforms.uSunDir, [Math.cos(sunAngle), Math.max(0.15, Math.abs(sunY)), 0.4]);
+      gl.uniform3fv(uniforms.uSunCol, [0.95 * dayFactor + 0.18, 0.90 * dayFactor + 0.22, 0.82 * dayFactor + 0.34]);
+      gl.uniform3fv(uniforms.uAmbCol, [0.38 * dayFactor + 0.14, 0.40 * dayFactor + 0.16, 0.44 * dayFactor + 0.22]);
+      gl.uniform3fv(uniforms.uFogCol, [skyR, skyG, skyB]);
+      gl.uniform3fv(uniforms.uCamPos, [player.x, player.y, player.z]);
+      const lightsOn = state.lampOn || (state.inRanger && ranger.headlights);
+      gl.uniform1f(uniforms.uLampOn, lightsOn ? 1.0 : 0.0);
+      gl.uniform3fv(uniforms.uLampDir, (state.inRanger && ranger.headlights)
+        ? [Math.sin(ranger.yaw), -0.12, -Math.cos(ranger.yaw)]
+        : [Math.sin(player.yaw) * Math.cos(player.pitch), -Math.sin(player.pitch), -Math.cos(player.yaw) * Math.cos(player.pitch)]
+      );
+
+      // 1. Terrain
+      drawMesh(meshes.terrain, Mat4.identity(), [1, 1, 1], 0.0, 1.0, true);
+
+      // 1b. Polaris Ranger 1000 UTV
+      {
+        const rx = ranger.x, ry = ranger.y, rz = ranger.z, ryaw = ranger.yaw;
+        const cy = Math.cos(ryaw), sy = Math.sin(ryaw);
+        const rPart = (ox, oy, oz, m, sx, ssy, sz, col, rxr = 0, ryr = 0, rzr = 0, em = 0) => {
+          const wx = rx + cy * ox - sy * oz;
+          const wz = rz - sy * ox - cy * oz;
+          drawMesh(meshes[m], Mat4.compose(wx, ry + oy, wz, rxr, ryaw + ryr, rzr, sx, ssy, sz), col, em);
+        };
+        const sage = [0.22, 0.34, 0.22];
+        const dark = [0.12, 0.13, 0.14];
+        const tire = [0.09, 0.09, 0.10];
+        const rim  = [0.68, 0.72, 0.76];
+
+        // Chassis, Hood & Rear Dump Cargo Bed
+        rPart(0, 0.68, 0, 'box', 1.72, 0.34, 3.25, dark);
+        rPart(0, 1.02, 1.08, 'box', 1.66, 0.44, 1.05, sage);
+        rPart(0, 0.96, 1.62, 'box', 1.56, 0.36, 0.12, dark);
+        rPart(0, 1.08, -0.95, 'box', 1.68, 0.48, 1.25, dark);
+        rPart(0, 0.88, 0.08, 'box', 1.54, 0.16, 0.65, [0.18, 0.16, 0.14]);
+        rPart(0, 1.25, -0.22, 'box', 1.52, 0.56, 0.14, [0.18, 0.16, 0.14]);
+
+        // Roll Cage Pillars & Roof Canopy
+        [[-0.74, 0.52], [0.74, 0.52], [-0.74, -0.32], [0.74, -0.32]].forEach(([px, pz]) => {
+          rPart(px, 1.58, pz, 'cyl', 0.08, 1.15, 0.08, dark);
+        });
+        rPart(0, 2.15, 0.08, 'box', 1.62, 0.10, 1.25, dark);
+
+        // LED Headlights
+        [-0.56, 0.56].forEach(hx => {
+          rPart(hx, 1.05, 1.63, 'sphere', 0.24, 0.16, 0.12, [1.0, 0.96, 0.82], 0, 0, 0, ranger.headlights ? 0.9 : 0.15);
+        });
+
+        // 4 Off-Road All-Terrain Wheels & Alloy Rims
+        [[-0.92, 1.12, true], [0.92, 1.12, true], [-0.92, -1.08, false], [0.92, -1.08, false]].forEach(([wx, wz, isFront]) => {
+          const stAng = isFront ? -ranger.steer : 0;
+          rPart(wx, 0.44, wz, 'cyl', 0.36, 0.86, 0.86, tire, ranger.wheelSpin, stAng, Math.PI / 2);
+          rPart(wx + (wx > 0 ? 0.05 : -0.05), 0.44, wz, 'cyl', 0.30, 0.46, 0.46, rim, ranger.wheelSpin, stAng, Math.PI / 2);
+        });
+      }
+
+      // 2. Water Holes & Swimming Fish Silhouettes
+      WATER_HOLES.forEach(wh => {
+        const ripple = Math.sin(timeSec * 2.2) * 0.05;
+        drawMesh(meshes.cyl, Mat4.compose(wh.x, -0.72 + ripple, wh.z, 0, 0, 0, wh.r * 2, 0.12, wh.r * 2), wh.col, 0.08, 0.84);
+        drawMesh(meshes.cyl, Mat4.compose(wh.x, -0.68 + ripple, wh.z, 0, timeSec * 0.3, 0, wh.r * 1.35, 0.04, wh.r * 1.35), [0.55, 0.85, 0.96], 0.18, 0.32);
+      });
+      underwaterFish.forEach(uf => {
+        const fx = uf.wh.x + Math.cos(uf.angle) * uf.radius;
+        const fz = uf.wh.z + Math.sin(uf.angle) * uf.radius;
+        drawMesh(meshes.sphere, Mat4.compose(fx, -1.05, fz, 0, -uf.angle, 0, 0.35, 0.22, 0.95), [0.10, 0.22, 0.28], 0.05, 0.85);
+      });
+
+      // 3. Static Buildings, Blinds, Feeders, Trees & Landmarks (distance-culled)
+      const cullDist = 290;
+      for (const b of staticBoxes) {
+        if (Math.hypot(b.x - player.x, b.z - player.z) > cullDist) continue;
+        drawMesh(meshes.box, Mat4.compose(b.x, b.y, b.z, 0, 0, 0, b.sx, b.sy, b.sz), b.col, b.emissive);
+      }
+      for (const c of staticCyls) {
+        if (Math.hypot(c.x - player.x, c.z - player.z) > cullDist) continue;
+        drawMesh(meshes.cyl, Mat4.compose(c.x, c.y, c.z, 0, 0, 0, c.r * 2, c.h, c.r * 2), c.col);
+      }
+      for (const k of staticCones) {
+        if (Math.hypot(k.x - player.x, k.z - player.z) > cullDist) continue;
+        drawMesh(meshes.cone, Mat4.compose(k.x, k.y, k.z, 0, 0, 0, k.r * 2, k.h, k.r * 2), k.col);
+      }
+
+      // 4. Trophy Plaques inside the North Hunter's Trophy Lodge
+      TROPHY_LIST.forEach((tr, i) => {
+        const row = Math.floor(i / 10);
+        const colIdx = i % 10;
+        const px = -4.5 + colIdx * 1.0;
+        const py = 2.6 - row * 0.85;
+        const pz = -22.2;
+        if (Math.hypot(px - player.x, pz - player.z) < 40) {
+          const unlocked = (state.trophies[tr.id] || 0) > 0;
+          drawMesh(meshes.box, Mat4.compose(px, py, pz, 0, 0, 0, 0.65, 0.55, 0.14), unlocked ? [0.95, 0.72, 0.16] : [0.24, 0.18, 0.14], unlocked ? 0.35 : 0);
+        }
+      });
+
+      // 5. Articulated 3D Wildlife & Waterfowl
+      animals.forEach(a => {
+        if (a.looted || Math.hypot(a.x - player.x, a.z - player.z) > 220) return;
+        const s = a.species.sz;
+        const id = a.species.id;
+        const roll = a.dead ? Math.PI * 0.5 : 0;
+        const col = a.hitFlash > 0 ? [1, 0.25, 0.25] : a.species.rgb;
+        const acc = a.species.acc;
+        const cy = Math.cos(a.yaw), sy = Math.sin(a.yaw);
+
+        if (a.species.isBird) {
+          const by = a.y + (a.dead ? 0.14 * s : 0.28 * s);
+          const flying = !a.dead && a.aiState === 'FLY';
+          const flap = flying ? Math.sin(a.legPhase) * 0.65 : 0.08;
+
+          drawMesh(meshes.sphere, Mat4.compose(a.x, by, a.z, 0, a.yaw, roll, 0.58 * s, 0.48 * s, 1.05 * s), col);
+          const hx = a.x + sy * 0.54 * s, hz = a.z + cy * 0.54 * s, hy = by + 0.34 * s;
+          drawMesh(meshes.cyl, Mat4.compose(a.x + sy * 0.42 * s, by + 0.18 * s, a.z + cy * 0.42 * s, 0.35, a.yaw, roll, 0.22 * s, 0.38 * s, 0.22 * s), acc);
+          drawMesh(meshes.sphere, Mat4.compose(hx, hy, hz, 0, a.yaw, roll, 0.34 * s, 0.32 * s, 0.40 * s), acc);
+          drawMesh(meshes.box, Mat4.compose(hx + sy * 0.26 * s, hy - 0.03 * s, hz + cy * 0.26 * s, 0, a.yaw, roll, 0.20 * s, 0.09 * s, 0.30 * s), [0.95, 0.68, 0.12]);
+          drawMesh(meshes.cone, Mat4.compose(a.x - sy * 0.62 * s, by + 0.08 * s, a.z - cy * 0.62 * s, -1.2, a.yaw, roll, 0.28 * s, 0.38 * s, 0.14 * s), acc);
+
+          [-1, 1].forEach(side => {
+            const wx = a.x + cy * side * (flying ? 0.55 : 0.28) * s;
+            const wz = a.z - sy * side * (flying ? 0.55 : 0.28) * s;
+            const wy = by + (flying ? Math.sin(a.legPhase) * 0.24 * s : 0.04 * s);
+            drawMesh(meshes.box, Mat4.compose(wx, wy, wz, 0, a.yaw, side * flap, flying ? 0.92 * s : 0.14 * s, flying ? 0.08 * s : 0.32 * s, 0.62 * s), col);
+          });
+          return;
+        }
+
+        const baseY = a.y + (a.dead ? 0.35 * s : 0.85 * s);
+        const breath = a.dead ? 0 : Math.sin(timeSec * 3.2 + a.legPhase * 0.2) * 0.025 * s;
+        const headBob = a.dead ? 0 : (a.aiState === 'GRAZE' ? -0.38 * s : Math.sin(a.legPhase * 0.5) * 0.06 * s);
+
+        // Realistic Anatomical Chest, Abdomen, Neck, Head, Snout, Ears & Eyes
+        drawMesh(meshes.sphere, Mat4.compose(a.x + sy * 0.22 * s, baseY + 0.03 * s + breath, a.z + cy * 0.22 * s, 0, a.yaw, roll, 0.86 * s, 0.82 * s + breath, 1.05 * s), col);
+        drawMesh(meshes.sphere, Mat4.compose(a.x - sy * 0.30 * s, baseY - 0.02 * s, a.z - cy * 0.30 * s, 0, a.yaw, roll, 0.78 * s, 0.74 * s, 0.98 * s), col);
+        drawMesh(meshes.cyl, Mat4.compose(a.x + sy * 0.62 * s, baseY + 0.24 * s + headBob * 0.5, a.z + cy * 0.62 * s, -0.55, a.yaw, roll, 0.44 * s, 0.62 * s, 0.48 * s), col);
+
+        const hx = a.x + sy * 0.90 * s, hz = a.z + cy * 0.90 * s, hy = baseY + 0.44 * s + headBob;
+        drawMesh(meshes.sphere, Mat4.compose(hx, hy, hz, 0, a.yaw, roll, 0.50 * s, 0.48 * s, 0.62 * s), col);
+        drawMesh(meshes.sphere, Mat4.compose(hx + sy * 0.34 * s, hy - 0.07 * s, hz + cy * 0.34 * s, 0, a.yaw, roll, 0.27 * s, 0.23 * s, 0.38 * s), acc);
+        drawMesh(meshes.sphere, Mat4.compose(hx + sy * 0.50 * s, hy - 0.04 * s, hz + cy * 0.50 * s, 0, a.yaw, roll, 0.13 * s, 0.11 * s, 0.11 * s), [0.08, 0.08, 0.09]);
+
+        // Ears & Eyes (with nocturnal eye-shine)
+        const eyeEmissive = dayFactor < 0.35 ? 0.85 : 0.05;
+        const eyeCol = a.aiState === 'CHASE' ? [1.0, 0.12, 0.12] : (dayFactor < 0.35 ? [0.95, 0.82, 0.28] : [0.08, 0.08, 0.08]);
+        [-1, 1].forEach(side => {
+          drawMesh(meshes.cone, Mat4.compose(hx + cy * side * 0.22 * s - sy * 0.06 * s, hy + 0.28 * s, hz - sy * side * 0.22 * s - cy * 0.06 * s, 0, a.yaw, roll - side * 0.25, 0.14 * s, 0.28 * s, 0.12 * s), acc);
+          drawMesh(meshes.sphere, Mat4.compose(hx + cy * side * 0.19 * s + sy * 0.16 * s, hy + 0.07 * s, hz - sy * side * 0.19 * s + cy * 0.16 * s, 0, a.yaw, roll, 0.08 * s, 0.08 * s, 0.08 * s), eyeCol, eyeEmissive);
+        });
+
+        // Species-Specific Features (Branching Antlers, Boar Tusks, Lion Mane, Zebra Stripes, Jaguar/Hyena Spots, Bushy Tails)
+        if (id === 'DEER' || id === 'CARIBOU') {
+          [-0.20, 0.20].forEach(ox => {
+            const ax = hx + cy * ox * s, az = hz - sy * ox * s;
+            drawMesh(meshes.cyl, Mat4.compose(ax, hy + 0.48 * s, az, 0, a.yaw, roll + ox * 1.2, 0.07 * s, 0.72 * s, 0.07 * s), [0.86, 0.80, 0.68]);
+            drawMesh(meshes.cyl, Mat4.compose(ax + sy * 0.14 * s, hy + 0.62 * s, az + cy * 0.14 * s, 0.55, a.yaw, roll + ox * 0.6, 0.05 * s, 0.36 * s, 0.05 * s), [0.86, 0.80, 0.68]);
+            drawMesh(meshes.cyl, Mat4.compose(ax - sy * 0.10 * s, hy + 0.72 * s, az - cy * 0.10 * s, -0.45, a.yaw, roll + ox * 1.5, 0.05 * s, 0.34 * s, 0.05 * s), [0.86, 0.80, 0.68]);
+          });
+        } else if (id === 'BOAR') {
+          [-0.14, 0.14].forEach(ox => {
+            drawMesh(meshes.cone, Mat4.compose(hx + cy * ox * s + sy * 0.42 * s, hy - 0.04 * s, hz - sy * ox * s + cy * 0.42 * s, 0.4, a.yaw, roll - ox * 2.2, 0.06 * s, 0.28 * s, 0.06 * s), [0.95, 0.92, 0.84]);
+          });
+        } else if (id === 'LION') {
+          drawMesh(meshes.sphere, Mat4.compose(hx - sy * 0.16 * s, hy, hz - cy * 0.16 * s, 0, a.yaw, roll, 0.82 * s, 0.86 * s, 0.74 * s), acc);
+        } else if (id === 'ZEBRA') {
+          [-0.25, 0.0, 0.25].forEach(oz => {
+            drawMesh(meshes.cyl, Mat4.compose(a.x + sy * oz * s, baseY + 0.02 * s, a.z + cy * oz * s, 0, a.yaw, roll, 0.85 * s, 0.76 * s, 0.12 * s), acc);
+          });
+        } else if (id === 'JAGUAR' || id === 'HYENA') {
+          [[-0.28, 0.18], [0.28, 0.18], [-0.28, -0.22], [0.28, -0.22]].forEach(([sxo, szo]) => {
+            drawMesh(meshes.sphere, Mat4.compose(a.x + cy * sxo * s + sy * szo * s, baseY + 0.12 * s, a.z - sy * sxo * s + cy * szo * s, 0, a.yaw, roll, 0.18 * s, 0.18 * s, 0.18 * s), acc);
+          });
+        }
+
+        // Tail
+        const isBushy = (id === 'ARCTIC_FOX' || id === 'TIMBER_WOLF' || id === 'SNOW_WOLF');
+        const tailWag = a.dead ? 0 : Math.sin(a.legPhase * 0.8) * 0.25;
+        drawMesh(meshes.cyl, Mat4.compose(a.x - sy * 0.84 * s, baseY + 0.10 * s, a.z - cy * 0.84 * s, -0.9, a.yaw + tailWag, roll, (isBushy ? 0.24 : 0.11) * s, (isBushy ? 0.72 : 0.56) * s, (isBushy ? 0.24 : 0.11) * s), isBushy ? col : acc);
+
+        // 4 Articulated Upper + Lower Legs & Hooves/Paws
+        [[-0.28, 0.48], [0.28, 0.48], [-0.28, -0.48], [0.28, -0.48]].forEach(([lx, lz], idx) => {
+          const swing = a.dead ? 0 : Math.sin(a.legPhase + (idx % 2 === 0 ? 0 : Math.PI)) * 0.36;
+          const wx = a.x + cy * lx * s + sy * lz * s;
+          const wz = a.z - sy * lx * s + cy * lz * s;
+          drawMesh(meshes.cyl, Mat4.compose(wx, baseY - 0.32 * s, wz, swing, a.yaw, roll, 0.21 * s, 0.46 * s, 0.21 * s), col);
+          drawMesh(meshes.cyl, Mat4.compose(wx + sy * Math.sin(swing) * 0.14 * s, baseY - 0.64 * s, wz + cy * Math.sin(swing) * 0.14 * s, swing * 0.6, a.yaw, roll, 0.14 * s, 0.44 * s, 0.14 * s), acc);
+        });
+      });
+
+      // 6. Fishing Bobber & Line
+      if (state.fishing.active) {
+        const f = state.fishing;
+        const bobY = f.by + (f.hooked ? Math.sin(timeSec * 18) * 0.12 : Math.sin(timeSec * 3) * 0.04);
+        drawMesh(meshes.sphere, Mat4.compose(f.bx, bobY, f.bz, 0, 0, 0, 0.26, 0.26, 0.26), [0.95, 0.22, 0.18], 0.3);
+        const mx = (player.x + f.bx) * 0.5, my = (player.y - 0.2 + bobY) * 0.5, mz = (player.z + f.bz) * 0.5;
+        const dist = Math.hypot(f.bx - player.x, bobY - (player.y - 0.2), f.bz - player.z);
+        const yawL = Math.atan2(f.bx - player.x, f.bz - player.z);
+        drawMesh(meshes.box, Mat4.compose(mx, my, mz, 0, yawL, 0, 0.03, 0.03, dist), [0.92, 0.95, 0.98], 0.2);
+      }
+
+      // 7. First-Person Viewmodel (Gun or Fishing Rod, hidden when driving or scoped)
+      if (!state.scoped && !state.inRanger) {
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        const vmProj = Mat4.perspective(0.95, canvas.width / Math.max(1, canvas.height), 0.05, 10);
+        const vmView = Mat4.identity();
+        gl.uniformMatrix4fv(uniforms.uProj, false, vmProj);
+        gl.uniformMatrix4fv(uniforms.uView, false, vmView);
+
+        const bobX = Math.sin(player.stepDist * 2.4) * 0.015;
+        const bobY = Math.abs(Math.cos(player.stepDist * 2.4)) * 0.015;
+        const recZ = state.recoil * 0.08;
+        const recPitch = state.recoil * 0.14;
+
+        if (state.activeSlot < 5) {
+          const g = GUNS[state.activeSlot];
+          drawMesh(meshes.box, Mat4.compose(0.28 + bobX, -0.24 - bobY, -0.52 + recZ, recPitch, 0, 0, 0.075, 0.11, 0.56), g.col);
+          drawMesh(meshes.cyl, Mat4.compose(0.28 + bobX, -0.19 - bobY, -0.78 + recZ, Math.PI * 0.5 + recPitch, 0, 0, 0.026, 0.52, 0.026), [0.16, 0.18, 0.20]);
+          if (g.zoom >= 2.2) {
+            drawMesh(meshes.cyl, Mat4.compose(0.28 + bobX, -0.14 - bobY, -0.48 + recZ, Math.PI * 0.5 + recPitch, 0, 0, 0.042, 0.28, 0.042), [0.10, 0.11, 0.12]);
+          }
+        } else if (state.activeSlot === 5) {
+          const r = RODS[state.equippedRod];
+          drawMesh(meshes.cyl, Mat4.compose(0.30 + bobX, -0.16 - bobY, -0.68, 0.55, -0.15, 0, 0.025, 0.95, 0.025), r.col);
+        } else {
+          // Walnut & Brass Duck Call Viewmodel (lifts toward mouth when blown)
+          const liftY = state.recoil * 0.12;
+          const liftX = -state.recoil * 0.14;
+          drawMesh(meshes.cyl, Mat4.compose(0.24 + bobX + liftX, -0.22 - bobY + liftY, -0.44, 1.15, -0.25, 0, 0.048, 0.16, 0.048), [0.46, 0.24, 0.10]);
+          drawMesh(meshes.cyl, Mat4.compose(0.23 + bobX + liftX, -0.20 - bobY + liftY, -0.49, 1.15, -0.25, 0, 0.052, 0.03, 0.052), [0.88, 0.68, 0.20]);
+          drawMesh(meshes.cone, Mat4.compose(0.21 + bobX + liftX, -0.18 - bobY + liftY, -0.54, 1.15, -0.25, 0, 0.056, 0.08, 0.056), [0.16, 0.34, 0.18]);
+        }
+      }
+    }
+
+    function renderFallback2D() {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const w = canvas.width, h = canvas.height;
+      ctx.fillStyle = '#1e3a5f';
+      ctx.fillRect(0, 0, w, h * 0.5);
+      ctx.fillStyle = '#2d5a27';
+      ctx.fillRect(0, h * 0.5, w, h * 0.5);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText('Wilderness Hunter & Angler 3D (Compatibility Mode)', 24, h - 75);
+    }
+
+    // =========================================================================
+    // 14. MAIN ENTRY & ANIMATION LOOP
+    // =========================================================================
+    window.addEventListener('load', () => {
+      try {
+        buildCampAndStructures();
+        populateEnvironmentAndAnimals();
+        resizeCanvas();
+        useWebGL = initGraphics();
+        updateHUD();
+
+        let lastTime = performance.now();
+        function frame(now) {
+          const dt = Math.min(0.05, (now - lastTime) / 1000);
+          lastTime = now;
+
+          resizeCanvas();
+          updateSimulation(dt);
+          if (useWebGL) {
+            renderWebGLScene(now / 1000);
+          } else {
+            renderFallback2D();
+          }
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      } catch (err) {
+        console.error('Initialization error:', err);
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
