@@ -68,7 +68,7 @@
 
     <!-- Optional Live Announcement Banner -->
     <div id="announcementBar" class="bg-gradient-to-r from-cyan-500/20 via-purple-500/20 to-pink-500/20 border-b border-cyan-500/30 px-4 py-2 text-center text-xs sm:text-sm font-medium text-cyan-200">
-        <span id="announcementText">fuck Royce cook</span>
+        <span id="announcementText">Fuck Royce Cook</span>
     </div>
 
     <!-- Top Navigation Header -->
@@ -86,7 +86,7 @@
                 <div class="truncate">
                     <h1 class="font-display font-extrabold text-base sm:text-xl tracking-wider text-white flex items-center gap-2 truncate">
                         <span id="brandTitleMain">NEXUS</span> <span id="brandTitleAccent" class="text-cyan-400">ARCADE</span>
-                        <span id="slotCountBadge" class="hidden md:inline-block text-[10px] font-sans font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">11 Games</span>
+                        <span id="slotCountBadge" class="hidden md:inline-block text-[10px] font-sans font-semibold uppercase tracking-widest px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">12 Games</span>
                     </h1>
                 </div>
             </div>
@@ -136,8 +136,7 @@
                     <h2 id="heroHeadline" class="font-display text-2xl sm:text-3xl lg:text-4xl font-black text-white tracking-tight">
                         SELECT A GAME TO <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-pink-500">LAUNCH</span>
                     </h2>
-                    <p id="heroSubtitle" class="text-slate-300 text-xs sm:text-sm leading-relaxed">Fuck that bumass Royce
-</p>
+                    <p id="heroSubtitle" class="text-slate-300 text-xs sm:text-sm leading-relaxed">Fuck that Bumass Royce Rex Cook</p>
                 </div>
 
                 <!-- Search & Status Bar -->
@@ -150,7 +149,7 @@
                     </div>
                     <div class="flex items-center justify-between px-4 py-2.5 rounded-xl bg-black/40 border border-white/10 text-xs">
                         <span class="text-slate-400">Library Status:</span>
-                        <span id="statusSummary" class="font-display font-bold text-cyan-400">10 / 10 LIVE</span>
+                        <span id="statusSummary" class="font-display font-bold text-cyan-400">11 / 12 LIVE</span>
                     </div>
                 </div>
             </div>
@@ -186,9 +185,9 @@
 
                 <!-- Navigation Tabs -->
                 <div class="flex flex-wrap gap-2">
-                    <button onclick="switchModalTab('slots')" id="tabBtn-slots" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition">1. Game Slots &amp; Add Extra</button>
+                    <button onclick="switchModalTab('slots')" id="tabBtn-slots" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition">1. Game Slots &amp; Add Extra</button>
                     <button onclick="switchModalTab('site')" id="tabBtn-site" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition">2. Site Branding &amp; Categories</button>
-                    <button onclick="switchModalTab('github')" id="tabBtn-github" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/5 text-slate-300 hover:bg-white/10 border border-white/10 transition">
+                    <button onclick="switchModalTab('github')" id="tabBtn-github" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-cyan-500 text-slate-950 transition">
                         <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                         <span>3. GitHub Direct Upload &amp; Publish</span>
                     </button>
@@ -199,10 +198,10 @@
             <div class="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
 
                 <!-- TAB 1: GAME SLOTS & ADD NEW GAME -->
-                <div id="modalTab-slots" class="space-y-4">
+                <div id="modalTab-slots" class="space-y-4 hidden">
                     <div class="flex flex-wrap items-center justify-between gap-3 bg-black/40 border border-white/10 p-4 rounded-2xl">
                         <div>
-                            <h4 class="font-display text-sm font-bold text-white">GAME LIBRARY SLOTS (<span id="modalSlotCount">11</span> TOTAL)</h4>
+                            <h4 class="font-display text-sm font-bold text-white">GAME LIBRARY SLOTS (<span id="modalSlotCount">12</span> TOTAL)</h4>
                             <p class="text-xs text-slate-400">Add unlimited games, reorder cards, set custom banner image URLs, or attach local `.html` files to test.</p>
                         </div>
                         <div class="flex flex-wrap gap-2">
@@ -219,7 +218,7 @@
                 </div>
 
                 <!-- TAB 2: SITE BRANDING, ANNOUNCEMENT & CUSTOM CATEGORIES -->
-                <div id="modalTab-site" class="hidden space-y-6">
+                <div id="modalTab-site" class="space-y-6 hidden">
                     <div class="bg-black/40 border border-white/10 rounded-2xl p-5 space-y-4">
                         <h4 class="font-display text-sm font-bold text-cyan-400">ARCADE HEADER &amp; ANNOUNCEMENT BANNER</h4>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -262,14 +261,14 @@
                 </div>
 
                 <!-- TAB 3: DIRECT GITHUB REPOSITORY SYNC & FILE UPLOADER -->
-                <div id="modalTab-github" class="hidden space-y-5">
+                <div id="modalTab-github" class="space-y-5">
                     <div class="bg-gradient-to-br from-emerald-950/40 to-cyan-950/30 border border-emerald-500/30 rounded-2xl p-5 space-y-4">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <div>
                                 <h4 class="font-display text-sm font-bold text-emerald-300">CONNECT YOUR GITHUB REPOSITORY</h4>
                                 <p class="text-xs text-slate-300 mt-0.5">Push new `.html` games and save your menu layout straight to GitHub from this page—no manual file downloading required.</p>
                             </div>
-                            <span id="ghConnectionBadge" class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-black/50 text-slate-400 border border-white/10">Not Connected</span>
+                            <span id="ghConnectionBadge" class="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">Connected: pokenerd002/site</span>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -328,7 +327,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-[11px] text-slate-300 mb-1">Category</label>
-                                    <select id="ghNewGameCategory" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none"></select>
+                                    <select id="ghNewGameCategory" class="w-full px-3 py-2 rounded-xl bg-[#090d16] border border-white/15 text-xs text-white focus:border-cyan-400 focus:outline-none"><option value="Action">Action</option><option value="Arcade">Arcade</option><option value="Strategy">Strategy</option></select>
                                 </div>
                             </div>
 
@@ -346,13 +345,11 @@
                                 </p>
                                 <div id="ghSyncLog" class="p-3 rounded-xl bg-[#060810] border border-white/10 text-[11px] font-mono text-slate-400 min-h-[84px] max-h-32 overflow-y-auto">
                                     Ready to sync with GitHub API.
-                                </div>
+                                <div class="text-slate-200">[11:00:58 PM] Connecting to pokenerd002/site...</div><div class="text-slate-200">[11:00:59 PM] Success! Connected to pokenerd002/site.</div><div class="text-slate-200">[11:01:01 PM] Generating clean index.html...</div><div class="text-slate-200">[11:01:02 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:01:52 PM] Generating clean index.html...</div><div class="text-slate-200">[11:01:52 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:01:59 PM] Generating clean index.html...</div><div class="text-slate-200">[11:01:59 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:02:39 PM] Connecting to pokenerd002/site...</div><div class="text-slate-200">[11:02:39 PM] Success! Connected to pokenerd002/site.</div><div class="text-slate-200">[11:02:41 PM] Generating clean index.html...</div><div class="text-slate-200">[11:02:42 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:03:16 PM] Generating clean index.html...</div><div class="text-slate-200">[11:03:17 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:04:18 PM] Generating clean index.html...</div><div class="text-slate-200">[11:04:19 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:04:23 PM] Connecting to pokenerd002/site...</div><div class="text-slate-200">[11:04:23 PM] Success! Connected to pokenerd002/site.</div><div class="text-slate-200">[11:04:25 PM] Generating clean index.html...</div><div class="text-slate-200">[11:04:25 PM] Publish failed: Resource not accessible by personal access token</div><div class="text-slate-200">[11:05:35 PM] Generating clean index.html...</div></div>
                             </div>
 
                             <div class="space-y-2">
-                                <button onclick="publishIndexHtmlToGitHub()" id="btnPublishIndexGh" class="w-full py-2.5 px-4 rounded-xl btn-amber font-display font-bold text-xs tracking-wider">
-                                    SAVE &amp; PUBLISH INDEX.HTML TO GITHUB
-                                </button>
+                                <button onclick="publishIndexHtmlToGitHub()" id="btnPublishIndexGh" class="w-full py-2.5 px-4 rounded-xl btn-amber font-display font-bold text-xs tracking-wider" disabled="">PUBLISHING TO GITHUB...</button>
                                 <button onclick="exportUpdatedIndexHtml()" class="w-full py-2 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-slate-300 transition">
                                     Or Download index.html Manually
                                 </button>
@@ -437,7 +434,7 @@
     <footer class="border-t border-white/10 py-5 mt-10 bg-[#05070d]">
         <div class="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500">
             <div>NEXUS ARCADE • Dynamic GitHub Pages Hub (<code class="text-slate-400">index.html</code>)</div>
-            <div id="footerSlotCount">11 Game Slots Configured</div>
+            <div id="footerSlotCount">12 Game Slots Configured</div>
         </div>
     </footer>
 
@@ -448,8 +445,8 @@
         const DEFAULT_SITE_CONFIG = {
           "brandMain": "NEXUS",
           "brandAccent": "ARCADE",
-          "subtitle": "Fuck that bumass Royce\n",
-          "announcement": "fuck Royce cook",
+          "subtitle": "Fuck that Bumass Royce Rex Cook",
+          "announcement": "Fuck Royce Cook",
           "categories": [
                     "Action",
                     "Arcade",
@@ -565,20 +562,19 @@
                               "theme": "amber",
                               "bannerUrl": "",
                               "description": "Custom HTML5 game hosted at game11.html."
+                    },
+                    {
+                              "slot": 12,
+                              "file": "game12.html",
+                              "title": "New Game #12",
+                              "genre": "Arcade 3D",
+                              "category": "Action",
+                              "theme": "emerald",
+                              "bannerUrl": "",
+                              "description": "Custom HTML5 game hosted at game12.html."
                     }
           ]
 };
-
-        const THEME_STYLES = {
-            cyan:    { badge: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30', btn: 'btn-cyan', c1: '#083344', c2: '#00f0ff' },
-            pink:    { badge: 'bg-pink-500/15 text-pink-300 border-pink-500/30', btn: 'btn-pink', c1: '#4c0519', c2: '#ff2a85' },
-            amber:   { badge: 'bg-amber-500/15 text-amber-300 border-amber-500/30', btn: 'btn-amber', c1: '#451a03', c2: '#fbbf24' },
-            emerald: { badge: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', btn: 'btn-emerald', c1: '#022c22', c2: '#10b981' },
-            purple:  { badge: 'bg-purple-500/15 text-purple-300 border-purple-500/30', btn: 'btn-purple', c1: '#2e1065', c2: '#a855f7' },
-            blue:    { badge: 'bg-blue-500/15 text-blue-300 border-blue-500/30', btn: 'btn-blue', c1: '#172554', c2: '#3b82f6' },
-            orange:  { badge: 'bg-orange-500/15 text-orange-300 border-orange-500/30', btn: 'btn-orange', c1: '#431407', c2: '#f97316' },
-            rose:    { badge: 'bg-rose-500/15 text-rose-300 border-rose-500/30', btn: 'btn-rose', c1: '#4c0519', c2: '#f43f5e' }
-        };
         const THEME_KEYS = Object.keys(THEME_STYLES);
 
         let siteConfig = loadConfig();
@@ -1385,6 +1381,7 @@
             probeUploadedGames();
         };
     </script>
+
 
 
 </body></html>
